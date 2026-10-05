@@ -1,0 +1,51 @@
+# ==========================================
+# Android & Gradle Build Artifacts
+# ==========================================
+.gradle/
+build/
+*/build/
+app/build/
+
+# Local configuration file (SDK location, etc)
+local.properties
+
+# Log files
+*.log
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+
+# Keystore / Signing files
+*.jks
+*.keystore
+
+# Native build cache
+.externalNativeBuild
+.cxx/
+
+# Android profiling / captures
+captures/
+
+# ==========================================
+# AI Agent & Local Assistant Configs
+# ==========================================
+.agents/
+.gemini/
+.claude/
+.cursor/
+.antigravity/
+AGENT.md
+
+# ==========================================
+# OS Generated Files
+# ==========================================
+.DS_Store
+Thumbs.db
+Desktop.ini
