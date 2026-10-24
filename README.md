@@ -73,9 +73,26 @@ app/src/
 
 ---
 
-## 🧪 Tài Liệu Kèm Theo
+## 📚 Tài Liệu Dự Án (Documentation)
 
-* [implementation_plan.md](file:///d:/file_hoc_tap/Nam%204-ki%201/Ph%C3%A1t%20tri%E1%BB%83n%20%E1%BB%A8ng%20d%E1%BB%A5ng%20tr%C3%AAn%20Thi%E1%BA%BFt%20b%E1%BB%8B%20Di%20%C4%91%E1%BB%99ng/mobile_wifi_optimizer/implementation_plan.md): Lộ trình 5 bước triển khai.
-* [implementation_notes.md](file:///d:/file_hoc_tap/Nam%204-ki%201/Ph%C3%A1t%20tri%E1%BB%83n%20%E1%BB%A8ng%20d%E1%BB%A5ng%20tr%C3%AAn%20Thi%E1%BA%BFt%20b%E1%BB%8B%20Di%20%C4%91%E1%BB%99ng/mobile_wifi_optimizer/implementation_notes.md): Chi tiết 5 lưu ý kỹ thuật trọng yếu và công thức toán chuẩn hóa.
-* [test_specifications.md](file:///d:/file_hoc_tap/Nam%204-ki%201/Ph%C3%A1t%20tri%E1%BB%83n%20%E1%BB%A8ng%20d%E1%BB%A5ng%20tr%C3%AAn%20Thi%E1%BA%BFt%20b%E1%BB%8B%20Di%20%C4%91%E1%BB%99ng/mobile_wifi_optimizer/test_specifications.md): Bảng đặc tả Test Matrix.
-* [testing_and_verification_guide.md](file:///d:/file_hoc_tap/Nam%204-ki%201/Ph%C3%A1t%20tri%E1%BB%83n%20%E1%BB%A8ng%20d%E1%BB%A5ng%20tr%C3%AAn%20Thi%E1%BA%BFt%20b%E1%BB%8B%20Di%20%C4%91%E1%BB%99ng/mobile_wifi_optimizer/testing_and_verification_guide.md): Hướng dẫn chạy kiểm thử trên Android Studio và máy thật.
+Toàn bộ tài liệu chi tiết của dự án được lưu trữ quy củ trong thư mục [`docs/`](docs/):
+
+### 🚀 Hướng Dẫn & Báo Cáo
+* 📖 [USER_GUIDE.md](docs/USER_GUIDE.md): Hướng dẫn cài đặt, thiết lập quyền và sử dụng ứng dụng.
+* 🌐 [WIKI.md](docs/WIKI.md): Toàn văn tài liệu GitHub Wiki đồ án môn học (12 chương hoàn chỉnh).
+* 📑 [Báo Cáo Đồ Án (PDF)](docs/reports/report.pdf): Báo cáo đề cương và đề tài gốc.
+
+### 🏛️ Kiến Trúc & Thiết Kế
+* 🏛️ [architecture.md](docs/architecture.md): Sơ đồ luồng hệ thống tương tác bằng Mermaid và hình ảnh trực quan.
+* 📂 [project_structure.md](docs/project_structure.md): Chi tiết cấu trúc thư mục, trách nhiệm module theo Clean Architecture.
+* 🌟 [features_docs.md](docs/features_docs.md): Đặc tả chi tiết các tính năng cốt lõi (Live Radar, 1-Tap Benchmark, Scoring Engine).
+* 🗄️ [data_schema.md](docs/data_schema.md): Đặc tả lược đồ dữ liệu và mô hình Domain/Data.
+
+### 🛠️ Kỹ Thuật & Triển Khai
+* 📝 [implementation_plan.md](docs/implementation_plan.md): Lộ trình 5 bước triển khai ứng dụng.
+* 📐 [implementation_notes.md](docs/implementation_notes.md): 5 lưu ý kỹ thuật trọng yếu và công thức chuẩn hóa điểm số.
+
+### 🧪 Kiểm Thử & Đảm Bảo Chất Lượng
+* 📋 [test_specifications.md](docs/test_specifications.md): Bảng đặc tả Test Matrix (Unit Tests & Edge Cases).
+* ✅ [testing_and_verification_guide.md](docs/testing_and_verification_guide.md): Hướng dẫn chạy kiểm thử trên Android Studio và máy thật.
+

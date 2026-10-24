@@ -124,5 +124,191 @@ class CalculateScoreUseCaseTest {
 
         assertEquals(0, score.finalScore)
         assertFalse(score.isRecommended)
+        assertEquals("Chưa kết nối Wi-Fi", score.summaryText)
+    }
+
+    @Test
+    fun packet_loss_over_50_percent_should_return_fixed_low_score_15() {
+        val wifiMetric = WifiMetric(
+            ssid = "Unstable_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -50,
+            linkSpeedMbps = 300,
+            frequencyMhz = 5180,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 35,
+            packetLossPercent = 66, // Rớt gói >= 50%
+            isSuccess = false
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.GAMING)
+
+        assertEquals(15, score.finalScore)
+        assertFalse(score.isRecommended)
+        assertEquals("Mạng mất tín hiệu Internet / Rớt gói", score.summaryText)
+    }
+
+    @Test
+    fun gaming_medium_ping_should_give_moderate_evaluation() {
+        // Final score >= 60 và ping <= 90ms -> "Khá ổn cho Gaming nhẹ"
+        val wifiMetric = WifiMetric(
+            ssid = "Home_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -60, // Điểm sóng ~ 75
+            linkSpeedMbps = 150, // Điểm tốc độ ~ 48
+            frequencyMhz = 2412,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 75, // Điểm ping ~ 69
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.GAMING)
+
+        assertTrue("Điểm final phải >= 60", score.finalScore >= 60)
+        assertEquals("Khá ổn cho Gaming nhẹ", score.summaryText)
+        assertFalse(score.isRecommended)
+    }
+
+    @Test
+    fun study_download_with_high_speed_should_be_recommended() {
+        val wifiMetric = WifiMetric(
+            ssid = "HighSpeed_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -55, // Điểm sóng ~ 88
+            linkSpeedMbps = 250, // Điểm tốc độ ~ 83 (W_Speed = 0.5)
+            frequencyMhz = 5180,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 40,
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.STUDY_DOWNLOAD)
+
+        assertTrue("Điểm học tập phải >= 70", score.finalScore >= 70)
+        assertTrue("Băng thông tốt phải được khuyến nghị", score.isRecommended)
+        assertEquals("Băng thông tải File tốc độ cao", score.summaryText)
+    }
+
+    @Test
+    fun study_download_with_medium_speed_should_be_acceptable_for_web_reading() {
+        val wifiMetric = WifiMetric(
+            ssid = "Average_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -54, // Sóng tốt (điểm ~ 90) bù lại tốc độ vừa phải
+            linkSpeedMbps = 45, // Tốc độ < 50Mbps
+            frequencyMhz = 2412,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 30,
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.STUDY_DOWNLOAD)
+
+        assertEquals("Đáp ứng duyệt Web & Đọc sách", score.summaryText)
+        assertFalse(score.isRecommended)
+    }
+
+    @Test
+    fun study_download_with_very_low_speed_should_give_warning() {
+        val wifiMetric = WifiMetric(
+            ssid = "Slow_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -80,
+            linkSpeedMbps = 8, // < 10Mbps -> 0 điểm tốc độ
+            frequencyMhz = 2412,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 60,
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.STUDY_DOWNLOAD)
+
+        assertTrue("Điểm phải thấp khi tốc độ cực yếu", score.finalScore < 50)
+        assertEquals("Tốc độ tải yếu", score.summaryText)
+        assertFalse(score.isRecommended)
+    }
+
+    @Test
+    fun video_call_with_good_rssi_and_ping_should_be_recommended() {
+        val wifiMetric = WifiMetric(
+            ssid = "Meet_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -58, // >= -75dBm (điểm sóng 80)
+            linkSpeedMbps = 150, // điểm tốc độ 48
+            frequencyMhz = 5180,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 35, // <= 100ms (điểm ping 92)
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.VIDEO_CALL)
+
+        assertTrue("Điểm Video Call phải >= 70", score.finalScore >= 70)
+        assertTrue("Phải được khuyến nghị gọi Video", score.isRecommended)
+        assertEquals("Đường truyền Video Call HD sắc nét", score.summaryText)
+    }
+
+    @Test
+    fun video_call_with_poor_rssi_should_not_be_recommended() {
+        val wifiMetric = WifiMetric(
+            ssid = "Distant_Wifi",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -82, // < -75dBm
+            linkSpeedMbps = 100,
+            frequencyMhz = 2412,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 40,
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.VIDEO_CALL)
+
+        assertFalse("Sóng yếu không được khuyến nghị Video Call", score.isRecommended)
+        assertEquals("Chất lượng Call có thể bị mờ / gián đoạn", score.summaryText)
+    }
+
+    @Test
+    fun extreme_edge_case_near_router_should_clamp_to_100() {
+        val wifiMetric = WifiMetric(
+            ssid = "NextToRouter",
+            bssid = "AA:BB:CC:DD:EE:FF",
+            rssi = -15, // Cực mạnh
+            linkSpeedMbps = 1200, // Wi-Fi 6 siêu tốc
+            frequencyMhz = 5800,
+            isConnected = true
+        )
+        val pingResult = PingResult(
+            latencyMs = 2, // Ping siêu thấp
+            packetLossPercent = 0,
+            isSuccess = true
+        )
+
+        val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.GAMING)
+
+        assertEquals(100, score.finalScore)
+        assertEquals(100, score.normalizedRssiScore)
+        assertEquals(100, score.normalizedPingScore)
+        assertEquals(100, score.normalizedSpeedScore)
+        assertTrue(score.isRecommended)
     }
 }
