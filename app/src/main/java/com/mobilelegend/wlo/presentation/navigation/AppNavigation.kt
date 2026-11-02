@@ -3,12 +3,14 @@ package com.mobilelegend.wlo.presentation.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -17,8 +19,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import com.mobilelegend.wlo.core.permissions.PermissionHelper
+import com.mobilelegend.wlo.data.sensor.DeviceLocationProvider
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.presentation.components.DefaultWifiPlaces
+import com.mobilelegend.wlo.presentation.components.PlaceIconType
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.WloBottomNavigationBar
@@ -44,15 +49,39 @@ fun AppNavigation(
     onOpenAppSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val locationProvider = remember(context) {
+        DeviceLocationProvider(context, PermissionHelper(context))
+    }
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
 
-    var places by remember { mutableStateOf(DefaultWifiPlaces) }
+    var userLocation by remember { mutableStateOf(locationProvider.getCurrentLocation()) }
+    var places by remember {
+        mutableStateOf(
+            locationProvider.syncPlacesWithUserLocation(DefaultWifiPlaces, userLocation)
+        )
+    }
     var selectedNeed by remember { mutableStateOf(WifiNeedOption.WORK) }
     var areaScore by remember { mutableIntStateOf(92) }
     var inspectedPlace by remember { mutableStateOf<WifiPlaceItem?>(null) }
 
+    val radarState by liveRadarViewModel.uiState.collectAsStateWithLifecycle()
     val measureState by measureViewModel.uiState.collectAsStateWithLifecycle()
+
+    val refreshGpsAndSyncPlaces: () -> Unit = {
+        locationProvider.requestSingleUpdate { latestCoord ->
+            userLocation = latestCoord
+            places = locationProvider.syncPlacesWithUserLocation(places, latestCoord)
+        }
+    }
+
+    LaunchedEffect(radarState.isLocationPermissionGranted, radarState.isGpsEnabled) {
+        if (radarState.isLocationPermissionGranted) {
+            refreshGpsAndSyncPlaces()
+        }
+    }
 
     val navigateToTab: (Screen) -> Unit = { targetScreen ->
         navController.navigate(targetScreen.route) {
@@ -115,10 +144,12 @@ fun AppNavigation(
                 )
             }
 
-            // Tab 2: Bản đồ Wi-Fi (anh2.png)
+            // Tab 2: Bản đồ Wi-Fi thực tế OpenStreetMap + GPS thật (anh2.png)
             composable(Screen.WifiMap.route) {
                 WifiMapScreen(
                     places = places,
+                    userLocation = userLocation,
+                    onRefreshUserLocation = refreshGpsAndSyncPlaces,
                     onInspectPlace = { place ->
                         inspectedPlace = place
                         navigateToTab(Screen.NetworkMeasure)
@@ -136,6 +167,38 @@ fun AppNavigation(
                     onOpenAppSettings = onOpenAppSettings,
                     onScoreMeasured = { newScore ->
                         areaScore = newScore
+                        val completed = (measureState.status as? MeasureStatus.Completed)?.score
+                        if (completed != null && completed.finalScore > 0) {
+                            val liveSsid = radarState.radarData.ssid.takeIf {
+                                it.isNotBlank() && !it.contains("unknown", ignoreCase = true) && !it.contains("Đang quét", ignoreCase = true)
+                            } ?: "Wi-Fi Tại Vị Trí Của Bạn"
+
+                            val measuredPlace = WifiPlaceItem(
+                                id = "measured_user_spot",
+                                rank = 1,
+                                name = liveSsid,
+                                district = "Vị trí hiện tại",
+                                distanceText = "10 m",
+                                score = completed.finalScore,
+                                qualityLabel = if (completed.finalScore >= 85) "Rất tốt" else if (completed.finalScore >= 70) "Tốt" else "Trung bình",
+                                downloadMbps = completed.rawLinkSpeedMbps.coerceAtLeast(10),
+                                uploadMbps = (completed.rawLinkSpeedMbps * 0.35f).toInt().coerceAtLeast(5),
+                                pingMs = completed.rawPingMs.toInt().coerceIn(1, 999),
+                                measurementsToday = 1,
+                                isSaved = true,
+                                isFree = true,
+                                iconType = PlaceIconType.WORK,
+                                latitude = userLocation.latitude + 0.0004,
+                                longitude = userLocation.longitude + 0.0004,
+                                ssid = liveSsid,
+                                isp = "Mạng hiện tại"
+                            )
+
+                            val others = places.filterNot { it.id == "measured_user_spot" }
+                            places = (listOf(measuredPlace) + others).mapIndexed { index, item ->
+                                item.copy(rank = index + 1)
+                            }
+                        }
                     }
                 )
             }

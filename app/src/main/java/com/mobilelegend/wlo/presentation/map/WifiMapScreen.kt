@@ -1,20 +1,28 @@
 package com.mobilelegend.wlo.presentation.map
 
-import androidx.compose.foundation.Canvas
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Color as AndroidColor
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
+import android.graphics.Path as AndroidPath
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
@@ -33,6 +40,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,16 +50,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.mobilelegend.wlo.data.sensor.UserGeoCoordinate
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
@@ -63,7 +70,12 @@ import com.mobilelegend.wlo.presentation.theme.SurfaceWhite
 import com.mobilelegend.wlo.presentation.theme.TextMuted
 import com.mobilelegend.wlo.presentation.theme.TextPrimary
 import com.mobilelegend.wlo.presentation.theme.TextSecondary
-import kotlin.math.roundToInt
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 
 private enum class MapFilterChip(val label: String) {
     ALL("Tất cả"),
@@ -75,12 +87,22 @@ private enum class MapFilterChip(val label: String) {
 @Composable
 fun WifiMapScreen(
     places: List<WifiPlaceItem>,
+    userLocation: UserGeoCoordinate,
+    onRefreshUserLocation: () -> Unit,
     onInspectPlace: (WifiPlaceItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(MapFilterChip.ALL) }
     var selectedPlaceId by remember { mutableStateOf(places.firstOrNull()?.id ?: "workshop_coffee") }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+
+    // Khởi tạo cấu hình User-Agent cho OSMdroid
+    LaunchedEffect(Unit) {
+        Configuration.getInstance().userAgentValue = context.packageName
+        onRefreshUserLocation()
+    }
 
     val filteredPlaces = remember(places, searchQuery, selectedFilter) {
         places.filter { place ->
@@ -100,6 +122,22 @@ fun WifiMapScreen(
     val selectedPlace = filteredPlaces.find { it.id == selectedPlaceId }
         ?: filteredPlaces.firstOrNull()
         ?: places.first()
+
+    // Tự động bay camera khi đổi địa điểm được chọn
+    LaunchedEffect(selectedPlace.id) {
+        mapViewRef?.controller?.animateTo(
+            GeoPoint(selectedPlace.latitude, selectedPlace.longitude),
+            16.6,
+            550L
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            mapViewRef?.onPause()
+            mapViewRef?.onDetach()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -197,8 +235,8 @@ fun WifiMapScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 4. Interactive Map Canvas Container
-        BoxWithConstraints(
+        // 4. Khung Bản đồ thực tế OpenStreetMap (OSMdroid)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -212,154 +250,82 @@ fun WifiMapScreen(
                 .background(Color(0xFFEAF1ED))
                 .border(2.dp, SurfaceWhite, RoundedCornerShape(26.dp))
         ) {
-            val mapWidthPx = constraints.maxWidth.toFloat()
-            val mapHeightPx = constraints.maxHeight.toFloat()
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    Configuration.getInstance().userAgentValue = ctx.packageName
+                    MapView(ctx).apply {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(true)
+                        zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                        minZoomLevel = 4.0
+                        maxZoomLevel = 20.0
 
-            // Nền bản đồ đường phố & sông Sài Gòn
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-
-                // Khối khu dân cư chéo mờ
-                val blockPath = Path().apply {
-                    moveTo(0f, h * 0.30f)
-                    lineTo(w * 0.85f, h * 0.68f)
-                    lineTo(w * 0.85f, h * 0.82f)
-                    lineTo(0f, h * 0.44f)
-                    close()
-                }
-                drawPath(blockPath, color = Color(0xFFE1EAE5))
-
-                // Mảng sông Sài Gòn bên phải
-                val riverPath = Path().apply {
-                    moveTo(w * 0.98f, h * 0.06f)
-                    lineTo(w, h * 0.06f)
-                    lineTo(w, h)
-                    lineTo(w * 0.72f, h)
-                    close()
-                }
-                drawPath(riverPath, color = Color(0xFFCDE3DC))
-
-                // Đường bờ sông màu trắng
-                drawLine(
-                    color = Color.White,
-                    start = Offset(w * 0.98f, h * 0.04f),
-                    end = Offset(w * 0.72f, h),
-                    strokeWidth = 6.dp.toPx()
-                )
-
-                // Các trục đường lớn màu trắng
-                drawLine(
-                    color = Color.White,
-                    start = Offset(w * 0.41f, 0f),
-                    end = Offset(w * 0.60f, h),
-                    strokeWidth = 12.dp.toPx()
-                )
-                drawLine(
-                    color = Color.White,
-                    start = Offset(0f, h * 0.28f),
-                    end = Offset(w * 0.93f, h * 0.14f),
-                    strokeWidth = 10.dp.toPx()
-                )
-                drawLine(
-                    color = Color.White,
-                    start = Offset(0f, h * 0.44f),
-                    end = Offset(w * 0.85f, h * 0.69f),
-                    strokeWidth = 10.dp.toPx()
-                )
-                drawLine(
-                    color = Color.White,
-                    start = Offset(w * 0.16f, h * 0.76f),
-                    end = Offset(w * 0.78f, h * 0.76f),
-                    strokeWidth = 8.dp.toPx()
-                )
-            }
-
-            // Nhãn khu vực BẾN NGHÉ & ĐA KAO
-            Text(
-                text = "BẾN NGHÉ",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-                color = Color(0xFF8D9C95),
-                modifier = Modifier
-                    .offset(
-                        x = (maxWidth * 0.16f),
-                        y = (maxHeight * 0.25f)
-                    )
-            )
-
-            Text(
-                text = "ĐA KAO",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
-                color = Color(0xFF8D9C95),
-                modifier = Modifier
-                    .offset(
-                        x = (maxWidth * 0.71f),
-                        y = (maxHeight * 0.46f)
-                    )
-            )
-
-            // Chấm xanh vị trí hiện tại của người dùng
-            Box(
-                modifier = Modifier
-                    .offset(
-                        x = (maxWidth * 0.56f) - 22.dp,
-                        y = (maxHeight * 0.49f) - 22.dp
-                    )
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF3B82F6).copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2563EB))
-                    )
-                }
-            }
-
-            // Các ghim điểm số Wi-Fi trên bản đồ
-            filteredPlaces.forEach { place ->
-                val isSelectedPin = place.id == selectedPlace.id
-                val pinSizeDp = if (isSelectedPin) 58.dp else 46.dp
-                val pinColor = when {
-                    place.score >= 92 -> PrimaryGreen
-                    place.score == 86 -> Color(0xFF499377)
-                    else -> SignalYellow
-                }
-
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                x = (mapWidthPx * place.mapX - (pinSizeDp.toPx() / 2f)).roundToInt(),
-                                y = (mapHeightPx * place.mapY - (pinSizeDp.toPx() / 2f)).roundToInt()
+                        // Bộ lọc màu nhẹ giúp bản đồ đường phố thật hài hoà với giao diện Light Emerald
+                        val softMintMatrix = ColorMatrix(
+                            floatArrayOf(
+                                0.90f, 0.04f, 0.02f, 0f, 10f,
+                                0.03f, 0.94f, 0.03f, 0f, 14f,
+                                0.02f, 0.04f, 0.90f, 0f, 11f,
+                                0f, 0f, 0f, 1f, 0f
                             )
+                        )
+                        overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(softMintMatrix))
+
+                        controller.setZoom(16.5)
+                        controller.setCenter(GeoPoint(userLocation.latitude, userLocation.longitude))
+                        onResume()
+                        mapViewRef = this
+                    }
+                },
+                update = { mapView ->
+                    mapView.overlays.clear()
+
+                    // 1. Marker chấm xanh định vị GPS thật của người dùng
+                    val userMarker = Marker(mapView).apply {
+                        position = GeoPoint(userLocation.latitude, userLocation.longitude)
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        icon = createUserGpsDotDrawable(context)
+                        title = "Vị trí của bạn"
+                        setOnMarkerClickListener { _, _ ->
+                            mapView.controller.animateTo(position, 17.0, 500L)
+                            true
                         }
-                        .size(pinSizeDp)
-                        .clickable { selectedPlaceId = place.id },
-                    contentAlignment = Alignment.Center
-                ) {
-                    MapTeardropPin(
-                        score = place.score,
-                        color = pinColor,
-                        isSelected = isSelectedPin,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    }
+                    mapView.overlays.add(userMarker)
+
+                    // 2. Các ghim điểm số Wi-Fi (vẽ ghim đang chọn sau cùng để nổi lên trên cùng)
+                    val sortedForRender = filteredPlaces.sortedBy { it.id == selectedPlace.id }
+                    sortedForRender.forEach { place ->
+                        val isSelectedPin = place.id == selectedPlace.id
+                        val pinHexColor = when {
+                            place.score >= 92 -> AndroidColor.parseColor("#0E6C50")
+                            place.score >= 85 && place.score != 89 -> AndroidColor.parseColor("#499377")
+                            else -> AndroidColor.parseColor("#DF9A3B")
+                        }
+
+                        val marker = Marker(mapView).apply {
+                            position = GeoPoint(place.latitude, place.longitude)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            icon = createTeardropPinDrawable(
+                                context = context,
+                                score = place.score,
+                                fillColor = pinHexColor,
+                                isSelected = isSelectedPin
+                            )
+                            title = place.name
+                            setOnMarkerClickListener { _, _ ->
+                                selectedPlaceId = place.id
+                                mapView.controller.animateTo(position, 16.8, 500L)
+                                true
+                            }
+                        }
+                        mapView.overlays.add(marker)
+                    }
+
+                    mapView.invalidate()
                 }
-            }
+            )
 
             // Legend góc trên bên trái ("• Tốt  • Trung bình")
             Surface(
@@ -368,7 +334,7 @@ fun WifiMapScreen(
                     .padding(14.dp),
                 shape = RoundedCornerShape(50),
                 color = SurfaceWhite,
-                shadowElevation = 3.dp
+                shadowElevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -408,14 +374,19 @@ fun WifiMapScreen(
                 }
             }
 
-            // Nút định vị góc trên bên phải
+            // Nút Định vị GPS thật góc trên bên phải
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(14.dp)
                     .size(42.dp)
                     .clickable {
-                        selectedPlaceId = places.first().id
+                        onRefreshUserLocation()
+                        mapViewRef?.controller?.animateTo(
+                            GeoPoint(userLocation.latitude, userLocation.longitude),
+                            16.8,
+                            650L
+                        )
                     },
                 shape = RoundedCornerShape(14.dp),
                 color = SurfaceWhite,
@@ -424,7 +395,7 @@ fun WifiMapScreen(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Outlined.LocationOn,
-                        contentDescription = "Định vị",
+                        contentDescription = "Định vị GPS của tôi",
                         tint = PrimaryGreen,
                         modifier = Modifier.size(20.dp)
                     )
@@ -522,81 +493,139 @@ fun WifiMapScreen(
     }
 }
 
-@Composable
-private fun MapTeardropPin(
-    score: Int,
-    color: Color,
-    isSelected: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val cx = w / 2f
-            val cy = h * 0.44f
-            val r = w * 0.42f
+/**
+ * Tạo Drawable chấm tròn xanh định vị GPS của người dùng có vòng hào quang mờ.
+ */
+private fun createUserGpsDotDrawable(context: Context): BitmapDrawable {
+    val density = context.resources.displayMetrics.density
+    val sizePx = (44f * density).toInt().coerceAtLeast(44)
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+    val cx = sizePx / 2f
+    val cy = sizePx / 2f
 
-            val pinPath = Path().apply {
-                moveTo(cx, h * 0.95f)
-                cubicTo(
-                    cx - r * 0.55f, h * 0.78f,
-                    cx - r, cy + r * 0.35f,
-                    cx - r, cy
-                )
-                cubicTo(
-                    cx - r, cy - r * 0.56f,
-                    cx - r * 0.56f, cy - r,
-                    cx, cy - r
-                )
-                cubicTo(
-                    cx + r * 0.56f, cy - r,
-                    cx + r, cy - r * 0.56f,
-                    cx + r, cy
-                )
-                cubicTo(
-                    cx + r, cy + r * 0.35f,
-                    cx + r * 0.55f, h * 0.78f,
-                    cx, h * 0.95f
-                )
-                close()
-            }
-
-            // Viền trắng bên ngoài
-            drawPath(
-                path = pinPath,
-                color = Color.White,
-                style = Stroke(width = if (isSelected) 4.dp.toPx() else 3.dp.toPx())
-            )
-            // Phần tô màu bên trong
-            drawPath(
-                path = pinPath,
-                color = color,
-                style = Fill
-            )
-        }
-
-        Column(
-            modifier = Modifier.padding(bottom = if (isSelected) 6.dp else 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Wifi,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(11.dp)
-                )
-            }
-            Text(
-                text = "$score",
-                fontSize = if (isSelected) 13.sp else 12.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.White
-            )
-        }
+    val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.argb(46, 59, 130, 246)
+        style = Paint.Style.FILL
     }
+    canvas.drawCircle(cx, cy, sizePx * 0.48f, haloPaint)
+
+    val whiteRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(cx, cy, sizePx * 0.23f, whiteRingPaint)
+
+    val blueDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.rgb(37, 99, 235)
+        style = Paint.Style.FILL
+    }
+    canvas.drawCircle(cx, cy, sizePx * 0.15f, blueDotPaint)
+
+    return BitmapDrawable(context.resources, bitmap)
+}
+
+/**
+ * Tạo Drawable ghim giọt nước (Teardrop Marker) hiển thị điểm số Wi-Fi sắc nét trên MapView.
+ */
+private fun createTeardropPinDrawable(
+    context: Context,
+    score: Int,
+    fillColor: Int,
+    isSelected: Boolean
+): BitmapDrawable {
+    val density = context.resources.displayMetrics.density
+    val dpSize = if (isSelected) 60f else 48f
+    val sizePx = (dpSize * density).toInt().coerceAtLeast(48)
+    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+
+    val w = sizePx.toFloat()
+    val h = sizePx.toFloat()
+    val cx = w / 2f
+    val cy = h * 0.43f
+    val r = w * 0.40f
+
+    val path = AndroidPath().apply {
+        moveTo(cx, h * 0.93f)
+        cubicTo(
+            cx - r * 0.55f, h * 0.77f,
+            cx - r, cy + r * 0.35f,
+            cx - r, cy
+        )
+        cubicTo(
+            cx - r, cy - r * 0.56f,
+            cx - r * 0.56f, cy - r,
+            cx, cy - r
+        )
+        cubicTo(
+            cx + r * 0.56f, cy - r,
+            cx + r, cy - r * 0.56f,
+            cx + r, cy
+        )
+        cubicTo(
+            cx + r, cy + r * 0.35f,
+            cx + r * 0.55f, h * 0.77f,
+            cx, h * 0.93f
+        )
+        close()
+    }
+
+    // Đổ bóng nhẹ dưới ghim
+    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.argb(36, 0, 0, 0)
+        style = Paint.Style.FILL
+    }
+    canvas.save()
+    canvas.translate(0f, 2f * density)
+    canvas.drawPath(path, shadowPaint)
+    canvas.restore()
+
+    // Tô nền màu ghim
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = fillColor
+        style = Paint.Style.FILL
+    }
+    canvas.drawPath(path, fillPaint)
+
+    // Viền trắng bao ngoài
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = (if (isSelected) 3.2f else 2.5f) * density
+    }
+    canvas.drawPath(path, borderPaint)
+
+    // Vẽ biểu tượng sóng Wi-Fi nhỏ phía trên điểm số nếu ghim đang được chọn
+    if (isSelected) {
+        val wifiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 1.6f * density
+            strokeCap = Paint.Cap.ROUND
+        }
+        val wifiCenterY = cy - r * 0.24f
+        val arc1 = RectF(cx - 6f * density, wifiCenterY - 5f * density, cx + 6f * density, wifiCenterY + 7f * density)
+        val arc2 = RectF(cx - 3.5f * density, wifiCenterY - 2.5f * density, cx + 3.5f * density, wifiCenterY + 4.5f * density)
+        canvas.drawArc(arc1, 225f, 90f, false, wifiPaint)
+        canvas.drawArc(arc2, 225f, 90f, false, wifiPaint)
+
+        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(cx, wifiCenterY + 2.2f * density, 1.2f * density, dotPaint)
+    }
+
+    // Vẽ điểm số ở giữa ghim
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        textSize = (if (isSelected) 13.5f else 12f) * density
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    val textOffsetY = if (isSelected) cy + r * 0.36f else cy + r * 0.22f
+    canvas.drawText(score.toString(), cx, textOffsetY, textPaint)
+
+    return BitmapDrawable(context.resources, bitmap)
 }

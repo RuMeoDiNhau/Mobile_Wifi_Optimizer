@@ -70,7 +70,7 @@ class DeviceLocationProvider(
 
             var bestLocation: Location? = null
             for (provider in providers) {
-                val loc = runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+                val loc = runCatching { locationManager?.getLastKnownLocation(provider) }.getOrNull()
                 if (loc != null) {
                     if (bestLocation == null || loc.accuracy < bestLocation.accuracy) {
                         bestLocation = loc
