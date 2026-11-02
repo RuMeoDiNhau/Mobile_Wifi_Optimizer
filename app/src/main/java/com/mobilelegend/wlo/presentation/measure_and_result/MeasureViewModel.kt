@@ -50,9 +50,17 @@ class MeasureViewModel(
                 }
                 delay(400)
 
-                // Hoàn tất
+                // Hoàn tất và tự động thêm vào lịch sử phiên
+                val autoSpot = SavedSpotItem(
+                    id = UUID.randomUUID().toString(),
+                    spotName = "Lượt đo #${_uiState.value.savedSpots.size + 1} (${category.title})",
+                    score = score
+                )
                 _uiState.update {
-                    it.copy(status = MeasureStatus.Completed(score))
+                    it.copy(
+                        status = MeasureStatus.Completed(score),
+                        savedSpots = it.savedSpots + autoSpot
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.update {

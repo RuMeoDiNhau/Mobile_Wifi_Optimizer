@@ -20,7 +20,7 @@ import com.mobilelegend.wlo.domain.usecase.StreamLiveWifiUseCase
 import com.mobilelegend.wlo.presentation.live_radar.LiveRadarViewModel
 import com.mobilelegend.wlo.presentation.measure_and_result.MeasureViewModel
 import com.mobilelegend.wlo.presentation.navigation.AppNavigation
-import com.mobilelegend.wlo.presentation.theme.DarkBackground
+import com.mobilelegend.wlo.presentation.theme.AppBackground
 import com.mobilelegend.wlo.presentation.theme.WloTheme
 
 class MainActivity : ComponentActivity() {
@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
             WloTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = DarkBackground
+                    color = AppBackground
                 ) {
                     val navController = rememberNavController()
                     AppNavigation(

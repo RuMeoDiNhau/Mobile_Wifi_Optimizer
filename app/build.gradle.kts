@@ -76,6 +76,9 @@ dependencies {
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
+    // OpenStreetMap (OSMdroid) cho Bản đồ Wi-Fi thực tế
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
 

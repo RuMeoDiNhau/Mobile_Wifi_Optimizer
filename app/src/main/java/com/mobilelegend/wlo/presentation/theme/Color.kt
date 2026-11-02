@@ -2,22 +2,48 @@ package com.mobilelegend.wlo.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Bảng màu công nghệ hiện đại (Tech Dark & Vibrant Accent)
-val DarkBackground = Color(0xFF0F172A)
-val SurfaceDark = Color(0xFF1E293B)
-val SurfaceDarkElevated = Color(0xFF334155)
+// Bảng màu Light Emerald Green theo thiết kế UI mới (anh1.png - anh5.png)
+val AppBackground = Color(0xFFF6F9F7)
+val SurfaceWhite = Color(0xFFFFFFFF)
+val SurfaceSoftGray = Color(0xFFF1F5F3)
 
-val PrimaryBlue = Color(0xFF38BDF8)
-val PrimaryBlueVariant = Color(0xFF0284C7)
-val SecondaryTeal = Color(0xFF2DD4BF)
+val PrimaryGreen = Color(0xFF0E6C50)
+val PrimaryGreenDark = Color(0xFF084B37)
+val ForestDarkCard = Color(0xFF103C2E)
+val ForestDarkCardEnd = Color(0xFF0E5740)
 
-// Màu tín hiệu sóng (Signal Quality Colors)
-val SignalGreen = Color(0xFF10B981)   // Sóng mạnh / Đạt chuẩn
-val SignalYellow = Color(0xFFF59E0B)  // Sóng trung bình
-val SignalRed = Color(0xFFEF4444)     // Sóng yếu / Lag
+val AccentEmerald = Color(0xFF28C78E)
+val LightGreenSurface = Color(0xFFE5F4EE)
+val MintBannerSurface = Color(0xFFDDF2E8)
+val SelectedNeedBorder = Color(0xFF79C8AA)
+val SelectedNeedBg = Color(0xFFECF7F2)
 
-val TextPrimary = Color(0xFFF8FAFC)
-val TextSecondary = Color(0xFF94A3B8)
-val TextMuted = Color(0xFF64748B)
+// Màu thẻ thumbnail danh sách quán
+val ThumbnailMint = Color(0xFFDCEEE7)
+val ThumbnailBlue = Color(0xFFDDEAF0)
+val ThumbnailLavender = Color(0xFFE6E4F0)
 
-val CardBorder = Color(0x33475569)
+// Màu tín hiệu & huy hiệu
+val SignalGreen = Color(0xFF0E6C50)
+val SignalYellow = Color(0xFFDF9A3B)
+val SignalRed = Color(0xFFEF4444)
+val NotificationDotOrange = Color(0xFFF97316)
+
+// Nút nổi "Đo Wi-Fi tại đây"
+val DarkFabBackground = Color(0xFF172520)
+
+// Màu chữ
+val TextPrimary = Color(0xFF111C18)
+val TextSecondary = Color(0xFF6E7B75)
+val TextMuted = Color(0xFF9AA5A0)
+
+val CardBorder = Color(0xFFE8EFEA)
+val DividerLight = Color(0xFFEEF3F0)
+
+// Các biến alias tương thích ngược với các component cũ
+val DarkBackground = AppBackground
+val SurfaceDark = SurfaceWhite
+val SurfaceDarkElevated = LightGreenSurface
+val PrimaryBlue = PrimaryGreen
+val PrimaryBlueVariant = PrimaryGreenDark
+val SecondaryTeal = AccentEmerald

@@ -71,7 +71,27 @@ class WifiScanner(private val context: Context) {
 
         val bssid = wifiInfo?.bssid ?: "00:00:00:00:00:00"
         val rssi = wifiInfo?.rssi ?: -100
-        val linkSpeed = wifiInfo?.linkSpeed ?: 0
+
+        // Ưu tiên đọc rxLinkSpeedMbps (Android 10+) hoặc linkSpeed truyền thống
+        var linkSpeed = wifiInfo?.linkSpeed ?: 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val rxSpeed = wifiInfo?.rxLinkSpeedMbps ?: 0
+            if (rxSpeed > linkSpeed) {
+                linkSpeed = rxSpeed
+            }
+        }
+
+        // Fallback thông minh: nếu linkSpeed <= 1 (thường gặp trên Máy ảo Emulator),
+        // lấy băng thông downstream thực tế từ NetworkCapabilities
+        if (linkSpeed <= 1) {
+            val activeNetwork = connectivityManager?.activeNetwork
+            val caps = connectivityManager?.getNetworkCapabilities(activeNetwork)
+            val downstreamMbps = (caps?.linkDownstreamBandwidthKbps ?: 0) / 1000
+            if (downstreamMbps > 1) {
+                linkSpeed = downstreamMbps
+            }
+        }
+
         val frequency = wifiInfo?.frequency ?: 0
 
         return WifiMetric(
