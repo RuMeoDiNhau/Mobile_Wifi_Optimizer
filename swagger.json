@@ -1,0 +1,1346 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Wi-Fi Location Optimizer (WLO) API",
+    "description": "### Wi-Fi Location Optimizer (WLO) - RESTful API Specification\n\nTài liệu đặc tả Swagger/OpenAPI 3.0 cho backend và dịch vụ đồng bộ của ứng dụng di động **Wi-Fi Location Optimizer (WLO)**.\n\nHệ thống cung cấp các nhóm chức năng chính:\n- **Scoring Engine**: Tính toán và chuẩn hóa điểm chất lượng mạng (0 - 100) dựa trên thông số sóng (RSSI, Ping, Packet Loss, LinkSpeed) theo từng loại nhu cầu (Gaming, Study/Download, Video Call).\n- **Benchmark & Telemetry**: Lưu trữ và truy xuất lịch sử kiểm định chất lượng sóng theo phiên.\n- **Saved Places & Comparison**: Quản lý các điểm đo đã lưu trong phòng (Bàn học, Giường ngủ, Cửa sổ...) và thuật toán so sánh tìm vị trí tối ưu nhất.\n- **Wi-Fi Coverage Map**: Cung cấp dữ liệu toạ độ GPS và chất lượng phủ sóng phục vụ hiển thị bản đồ nhiệt (Heatmap).\n- **Network Diagnostics**: Dịch vụ hỗ trợ đo Ping độ trễ thời gian thực và thông tin kết nối Internet.\n- **User Profile & Preferences**: Quản lý cài đặt cấu hình ưu tiên của người dùng.\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "WLO Engineering Team",
+      "email": "support@wlo-optimizer.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api/v1",
+      "description": "Máy chủ kiểm thử cục bộ (Local Development Server)"
+    },
+    {
+      "url": "https://api.wlo-optimizer.app/v1",
+      "description": "Máy chủ môi trường Production (Staging & Live)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Scoring Engine",
+      "description": "Thuật toán chuẩn hóa và chấm điểm chất lượng Wi-Fi theo Use Case"
+    },
+    {
+      "name": "Benchmark & Telemetry",
+      "description": "Ghi nhận và quản lý dữ liệu kiểm định 3 giây từ thiết bị Android"
+    },
+    {
+      "name": "Saved Places & Sessions",
+      "description": "Quản lý danh sách điểm đo đã lưu và bảng so sánh vị trí tối ưu"
+    },
+    {
+      "name": "Coverage Map",
+      "description": "Tọa độ địa lý và thông số sóng phục vụ tính năng Wi-Fi Map"
+    },
+    {
+      "name": "Network Diagnostics",
+      "description": "Đo độ trễ Socket Ping và kiểm tra kết nối mạng"
+    },
+    {
+      "name": "User Profile",
+      "description": "Cấu hình người dùng và tùy chọn thiết bị"
+    }
+  ],
+  "paths": {
+    "/score/calculate": {
+      "post": {
+        "tags": [
+          "Scoring Engine"
+        ],
+        "summary": "Tính toán điểm chất lượng mạng từ dữ liệu phần cứng thô",
+        "description": "Áp dụng thuật toán chuẩn hóa dữ liệu phần cứng (RSSI, Ping, LinkSpeed) và nhân bộ trọng số\ntương ứng theo mục đích sử dụng (Gaming, Video Call, Download).\n",
+        "operationId": "calculateLocationScore",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoreCalculationRequest"
+              },
+              "examples": {
+                "gamingExample": {
+                  "summary": "Đo kiểm nhu cầu Chơi Game (Gaming)",
+                  "value": {
+                    "category": "GAMING",
+                    "rssi": -58,
+                    "pingMs": 25,
+                    "packetLossPercent": 0,
+                    "linkSpeedMbps": 144,
+                    "isConnected": true
+                  }
+                },
+                "videoCallExample": {
+                  "summary": "Đo kiểm nhu cầu Họp/Học Online (Video Call)",
+                  "value": {
+                    "category": "VIDEO_CALL",
+                    "rssi": -65,
+                    "pingMs": 42,
+                    "packetLossPercent": 0,
+                    "linkSpeedMbps": 86,
+                    "isConnected": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tính điểm thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationScore"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dữ liệu đầu vào không hợp lệ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/score/weights": {
+      "get": {
+        "tags": [
+          "Scoring Engine"
+        ],
+        "summary": "Lấy bảng phân bổ trọng số hiện tại của hệ thống",
+        "description": "Trả về bộ trọng số (Ping, RSSI, Speed) cho từng Use Case.",
+        "operationId": "getUseCaseWeights",
+        "responses": {
+          "200": {
+            "description": "Thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UseCaseWeightConfig"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/benchmarks": {
+      "get": {
+        "tags": [
+          "Benchmark & Telemetry"
+        ],
+        "summary": "Lấy danh sách lịch sử các phiên Benchmark đã đo",
+        "operationId": "listBenchmarks",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Lọc theo loại nhu cầu",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/UseCaseCategory"
+            }
+          },
+          {
+            "name": "ssid",
+            "in": "query",
+            "description": "Lọc theo tên Wi-Fi (SSID)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "KTX_KhuA_Wifi"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Số trang (mặc định 1)",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Số lượng kết quả mỗi trang",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách phiên kiểm định",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "example": 12
+                    },
+                    "page": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BenchmarkRecord"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Benchmark & Telemetry"
+        ],
+        "summary": "Ghi nhận một phiên Benchmark 3 giây mới từ thiết bị",
+        "operationId": "createBenchmark",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBenchmarkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Ghi nhận thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarkRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dữ liệu đo không hợp lệ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/benchmarks/{benchmarkId}": {
+      "get": {
+        "tags": [
+          "Benchmark & Telemetry"
+        ],
+        "summary": "Lấy thông tin chi tiết một phiên Benchmark",
+        "operationId": "getBenchmarkById",
+        "parameters": [
+          {
+            "name": "benchmarkId",
+            "in": "path",
+            "required": true,
+            "description": "ID định danh phiên Benchmark",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "a8098c1a-f86e-11da-bd1a-00112444be1e"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết phiên kiểm định",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BenchmarkRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không tìm thấy bản ghi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Benchmark & Telemetry"
+        ],
+        "summary": "Xóa một phiên Benchmark khỏi lịch sử",
+        "operationId": "deleteBenchmark",
+        "parameters": [
+          {
+            "name": "benchmarkId",
+            "in": "path",
+            "required": true,
+            "description": "ID của phiên Benchmark cần xóa",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Đã xóa thành công (No Content)"
+          },
+          "404": {
+            "description": "Không tìm thấy bản ghi"
+          }
+        }
+      }
+    },
+    "/places": {
+      "get": {
+        "tags": [
+          "Saved Places & Sessions"
+        ],
+        "summary": "Lấy danh sách các vị trí đã lưu của người dùng",
+        "operationId": "getSavedPlaces",
+        "responses": {
+          "200": {
+            "description": "Danh sách các vị trí đã lưu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SavedPlace"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Saved Places & Sessions"
+        ],
+        "summary": "Lưu một vị trí mới đã đo kiểm (Bàn học, Giường ngủ, Cửa sổ...)",
+        "operationId": "savePlace",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavedPlaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lưu vị trí thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlace"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/places/{placeId}": {
+      "get": {
+        "tags": [
+          "Saved Places & Sessions"
+        ],
+        "summary": "Lấy thông tin chi tiết của một vị trí đã lưu",
+        "operationId": "getPlaceById",
+        "parameters": [
+          {
+            "name": "placeId",
+            "in": "path",
+            "required": true,
+            "description": "ID của vị trí",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết vị trí",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlace"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không tìm thấy vị trí"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Saved Places & Sessions"
+        ],
+        "summary": "Cập nhật tên hoặc ghi chú của vị trí đã lưu",
+        "operationId": "updatePlace",
+        "parameters": [
+          {
+            "name": "placeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlace"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Saved Places & Sessions"
+        ],
+        "summary": "Xóa vị trí khỏi danh sách đã lưu",
+        "operationId": "deletePlace",
+        "parameters": [
+          {
+            "name": "placeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Đã xóa thành công"
+          }
+        }
+      }
+    },
+    "/places/compare": {
+      "post": {
+        "tags": [
+          "Saved Places & Sessions"
+        ],
+        "summary": "So sánh các vị trí trong phiên và xác định vị trí tốt nhất",
+        "description": "Nhận vào danh sách ID các vị trí hoặc dữ liệu điểm số, tự động phân tích\nvà gắn huy hiệu \"TỐT NHẤT\" (BEST SPOT) cho vị trí có điểm cao nhất.\n",
+        "operationId": "comparePlaces",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Kết quả bảng so sánh phiên",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/map/spots": {
+      "get": {
+        "tags": [
+          "Coverage Map"
+        ],
+        "summary": "Lấy các điểm đo Wi-Fi xung quanh toạ độ GPS",
+        "operationId": "getMapSpots",
+        "parameters": [
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "example": 21.028511
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "example": 105.854444
+            }
+          },
+          {
+            "name": "radiusMeters",
+            "in": "query",
+            "description": "Bán kính tìm kiếm tính theo mét (mặc định 1000m)",
+            "schema": {
+              "type": "integer",
+              "default": 1000,
+              "maximum": 10000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách các điểm đo trên bản đồ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MapSpotItem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Coverage Map"
+        ],
+        "summary": "Đóng góp điểm đo Wi-Fi kèm toạ độ GPS lên hệ thống bản đồ",
+        "operationId": "reportMapSpot",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportMapSpotRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đã lưu toạ độ điểm Wi-Fi thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapSpotItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/diagnostics/ping": {
+      "get": {
+        "tags": [
+          "Network Diagnostics"
+        ],
+        "summary": "Endpoint phản hồi tức thì để đo độ trễ mạng (Ping Round-Trip Time)",
+        "description": "Endpoint gọn nhẹ trả về timestamp tức thì nhằm giúp mobile client tính toán\nRound-Trip Time (RTT) tương tự như socket ping 1.1.1.1.\n",
+        "operationId": "pingHealthCheck",
+        "responses": {
+          "200": {
+            "description": "Phản hồi Pong tức thì",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "pong"
+                    },
+                    "serverTimestamp": {
+                      "type": "integer",
+                      "format": "int64",
+                      "example": 1730620000123
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/diagnostics/network-info": {
+      "get": {
+        "tags": [
+          "Network Diagnostics"
+        ],
+        "summary": "Lấy thông tin địa chỉ IP công cộng và nhà mạng (ISP)",
+        "operationId": "getNetworkInfo",
+        "responses": {
+          "200": {
+            "description": "Thông tin nhà mạng & IP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkInfoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/profile": {
+      "get": {
+        "tags": [
+          "User Profile"
+        ],
+        "summary": "Lấy thông tin cấu hình người dùng và thiết bị",
+        "operationId": "getUserProfile",
+        "responses": {
+          "200": {
+            "description": "Cấu hình người dùng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "User Profile"
+        ],
+        "summary": "Cập nhật nhu cầu mặc định và cài đặt thông báo",
+        "operationId": "updateUserProfile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UseCaseCategory": {
+        "type": "string",
+        "enum": [
+          "GAMING",
+          "STUDY_DOWNLOAD",
+          "VIDEO_CALL"
+        ],
+        "description": "Phân loại nhu cầu sử dụng mạng của sinh viên:\n* `GAMING` - Chơi game online: Ưu tiên Ping cực thấp, không rớt gói.\n* `STUDY_DOWNLOAD` - Học tập & tải file: Ưu tiên băng thông và LinkSpeed cao.\n* `VIDEO_CALL` - Họp/Học trực tuyến: Cần RSSI ổn định và Ping ổn định.\n",
+        "example": "GAMING"
+      },
+      "PlaceIconType": {
+        "type": "string",
+        "enum": [
+          "STUDY",
+          "BED",
+          "WINDOW",
+          "COFFEE",
+          "OFFICE",
+          "DEFAULT"
+        ],
+        "description": "Icon trực quan hiển thị loại địa điểm trong nhà/phòng",
+        "example": "STUDY"
+      },
+      "SignalQualityLevel": {
+        "type": "string",
+        "enum": [
+          "EXCELLENT",
+          "GOOD",
+          "FAIR",
+          "POOR"
+        ],
+        "description": "Cấp độ sóng phân theo thang màu (Xanh lá >= -60, Vàng -61 đến -75, Đỏ <= -76)",
+        "example": "EXCELLENT"
+      },
+      "WifiMetric": {
+        "type": "object",
+        "required": [
+          "ssid",
+          "bssid",
+          "rssi",
+          "linkSpeedMbps",
+          "frequencyMhz",
+          "isConnected"
+        ],
+        "properties": {
+          "ssid": {
+            "type": "string",
+            "description": "Tên mạng Wi-Fi",
+            "example": "KTX_KhuB_Tang3"
+          },
+          "bssid": {
+            "type": "string",
+            "description": "Địa chỉ MAC của Router / Access Point",
+            "example": "94:83:c4:0a:11:ff"
+          },
+          "rssi": {
+            "type": "integer",
+            "description": "Cường độ tín hiệu dBm (-100 đến -30)",
+            "example": -55
+          },
+          "linkSpeedMbps": {
+            "type": "integer",
+            "description": "Tốc độ liên kết đường truyền (Mbps)",
+            "example": 144
+          },
+          "frequencyMhz": {
+            "type": "integer",
+            "description": "Tần số kênh sóng (MHz), ví dụ 2412 cho 2.4GHz hoặc 5180 cho 5GHz",
+            "example": 5180
+          },
+          "isConnected": {
+            "type": "boolean",
+            "description": "Trạng thái thiết bị đang kết nối Wi-Fi hay không",
+            "example": true
+          }
+        }
+      },
+      "PingResult": {
+        "type": "object",
+        "required": [
+          "latencyMs",
+          "packetLossPercent",
+          "isSuccess"
+        ],
+        "properties": {
+          "latencyMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Thời gian phản hồi mạng (ms)",
+            "example": 22
+          },
+          "packetLossPercent": {
+            "type": "integer",
+            "description": "Tỷ lệ mất gói tin (0 - 100%)",
+            "example": 0
+          },
+          "isSuccess": {
+            "type": "boolean",
+            "description": "Kết nối Socket Ping có thành công hay không",
+            "example": true
+          }
+        }
+      },
+      "LocationScore": {
+        "type": "object",
+        "required": [
+          "finalScore",
+          "normalizedRssiScore",
+          "normalizedPingScore",
+          "normalizedSpeedScore",
+          "category",
+          "summaryText",
+          "recommendation",
+          "isRecommended",
+          "rawRssi",
+          "rawPingMs",
+          "rawLinkSpeedMbps"
+        ],
+        "properties": {
+          "finalScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Điểm tổng hợp được làm tròn (0 đến 100)",
+            "example": 91
+          },
+          "normalizedRssiScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Điểm sóng chuẩn hóa (0-100)",
+            "example": 88
+          },
+          "normalizedPingScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Điểm ping chuẩn hóa (0-100)",
+            "example": 97
+          },
+          "normalizedSpeedScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Điểm tốc độ đường truyền chuẩn hóa (0-100)",
+            "example": 85
+          },
+          "category": {
+            "$ref": "#/components/schemas/UseCaseCategory"
+          },
+          "summaryText": {
+            "type": "string",
+            "description": "Lời nhận xét ngắn gọn",
+            "example": "Tuyệt vời để leo rank mượt mà"
+          },
+          "recommendation": {
+            "type": "string",
+            "description": "Lời khuyên tối ưu chi tiết cho người dùng",
+            "example": "Ping 22ms cực thấp và ổn định. Vị trí này hoàn hảo cho game MOBA/FPS."
+          },
+          "isRecommended": {
+            "type": "boolean",
+            "description": "Có đạt tiêu chuẩn vùng xanh khuyến nghị hay không",
+            "example": true
+          },
+          "rawRssi": {
+            "type": "integer",
+            "description": "Thông số dBm gốc",
+            "example": -54
+          },
+          "rawPingMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Thông số Ping gốc (ms)",
+            "example": 22
+          },
+          "rawLinkSpeedMbps": {
+            "type": "integer",
+            "description": "Thông số LinkSpeed gốc (Mbps)",
+            "example": 144
+          }
+        }
+      },
+      "ScoreCalculationRequest": {
+        "type": "object",
+        "required": [
+          "category",
+          "rssi",
+          "pingMs",
+          "packetLossPercent",
+          "linkSpeedMbps",
+          "isConnected"
+        ],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/UseCaseCategory"
+          },
+          "rssi": {
+            "type": "integer",
+            "description": "Cường độ tín hiệu dBm (VD -55)",
+            "example": -58
+          },
+          "pingMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Độ trễ Socket Ping (ms)",
+            "example": 25
+          },
+          "packetLossPercent": {
+            "type": "integer",
+            "description": "Tỷ lệ mất gói tin (0 - 100)",
+            "example": 0
+          },
+          "linkSpeedMbps": {
+            "type": "integer",
+            "description": "Tốc độ liên kết đường truyền (Mbps)",
+            "example": 144
+          },
+          "isConnected": {
+            "type": "boolean",
+            "default": true,
+            "example": true
+          }
+        }
+      },
+      "UseCaseWeightConfig": {
+        "type": "object",
+        "required": [
+          "category",
+          "pingWeight",
+          "rssiWeight",
+          "speedWeight"
+        ],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/UseCaseCategory"
+          },
+          "pingWeight": {
+            "type": "number",
+            "format": "float",
+            "description": "Trọng số của độ trễ Ping (0.0 - 1.0)",
+            "example": 0.6
+          },
+          "rssiWeight": {
+            "type": "number",
+            "format": "float",
+            "description": "Trọng số của cường độ tín hiệu RSSI (0.0 - 1.0)",
+            "example": 0.3
+          },
+          "speedWeight": {
+            "type": "number",
+            "format": "float",
+            "description": "Trọng số của băng thông LinkSpeed (0.0 - 1.0)",
+            "example": 0.1
+          }
+        }
+      },
+      "BenchmarkRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "wifiMetric",
+          "pingResult",
+          "score",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "e29b12a8-a5b6-4ff7-b67e-52eb36712399"
+          },
+          "locationTag": {
+            "type": "string",
+            "nullable": true,
+            "description": "Nhãn vị trí người dùng đặt khi đo",
+            "example": "Bàn học cạnh ban công"
+          },
+          "wifiMetric": {
+            "$ref": "#/components/schemas/WifiMetric"
+          },
+          "pingResult": {
+            "$ref": "#/components/schemas/PingResult"
+          },
+          "score": {
+            "$ref": "#/components/schemas/LocationScore"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Timestamp thời điểm thực hiện (Unix Epoch ms)",
+            "example": 1730620188000
+          }
+        }
+      },
+      "CreateBenchmarkRequest": {
+        "type": "object",
+        "required": [
+          "wifiMetric",
+          "pingResult",
+          "category"
+        ],
+        "properties": {
+          "locationTag": {
+            "type": "string",
+            "example": "Bàn học"
+          },
+          "category": {
+            "$ref": "#/components/schemas/UseCaseCategory"
+          },
+          "wifiMetric": {
+            "$ref": "#/components/schemas/WifiMetric"
+          },
+          "pingResult": {
+            "$ref": "#/components/schemas/PingResult"
+          }
+        }
+      },
+      "SavedPlace": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "iconType",
+          "score",
+          "timestamp"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "c4b1897d-6fe7-4f65-8b37-9d7a229045cb"
+          },
+          "name": {
+            "type": "string",
+            "description": "Tên vị trí đo được lưu",
+            "example": "Bàn học (Cửa sổ)"
+          },
+          "iconType": {
+            "$ref": "#/components/schemas/PlaceIconType"
+          },
+          "ssid": {
+            "type": "string",
+            "example": "KTX_Phong402_5G"
+          },
+          "score": {
+            "$ref": "#/components/schemas/LocationScore"
+          },
+          "isBestInSession": {
+            "type": "boolean",
+            "description": "Đánh dấu vị trí đạt điểm cao nhất trong phiên so sánh",
+            "example": true
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1730620300000
+          }
+        }
+      },
+      "CreateSavedPlaceRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "iconType",
+          "score"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Giường tầng trên"
+          },
+          "iconType": {
+            "$ref": "#/components/schemas/PlaceIconType"
+          },
+          "ssid": {
+            "type": "string",
+            "example": "KTX_Phong402_5G"
+          },
+          "score": {
+            "$ref": "#/components/schemas/LocationScore"
+          }
+        }
+      },
+      "UpdatePlaceRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Bàn học (Đã kê sát router)"
+          },
+          "iconType": {
+            "$ref": "#/components/schemas/PlaceIconType"
+          }
+        }
+      },
+      "CompareRequest": {
+        "type": "object",
+        "required": [
+          "placeIds"
+        ],
+        "properties": {
+          "placeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": [
+              "c4b1897d-6fe7-4f65-8b37-9d7a229045cb",
+              "a71f0102-45e3-4672-9720-334dcb91e012",
+              "88bcf040-3b02-4e08-9df5-618485a4911f"
+            ]
+          }
+        }
+      },
+      "CompareResponse": {
+        "type": "object",
+        "required": [
+          "bestPlaceId",
+          "rankedPlaces"
+        ],
+        "properties": {
+          "bestPlaceId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "c4b1897d-6fe7-4f65-8b37-9d7a229045cb"
+          },
+          "bestPlaceName": {
+            "type": "string",
+            "example": "Bàn học (Cửa sổ)"
+          },
+          "summaryInsight": {
+            "type": "string",
+            "example": "Vị trí Bàn học có sóng khỏe hơn 12 dBm và Ping thấp hơn 20ms so với Giường ngủ."
+          },
+          "rankedPlaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedPlace"
+            }
+          }
+        }
+      },
+      "MapSpotItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "latitude",
+          "longitude",
+          "ssid",
+          "rssi",
+          "finalScore",
+          "quality"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "9a7f3110-3882-44cc-8bb9-30f14065e121"
+          },
+          "placeName": {
+            "type": "string",
+            "example": "Thư viện tầng 2 - Bàn A4"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "example": 21.028511
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "example": 105.854444
+          },
+          "ssid": {
+            "type": "string",
+            "example": "BK_Free_Wifi"
+          },
+          "rssi": {
+            "type": "integer",
+            "example": -58
+          },
+          "finalScore": {
+            "type": "integer",
+            "example": 88
+          },
+          "quality": {
+            "$ref": "#/components/schemas/SignalQualityLevel"
+          },
+          "lastUpdated": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1730620000000
+          }
+        }
+      },
+      "ReportMapSpotRequest": {
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "wifiMetric",
+          "score"
+        ],
+        "properties": {
+          "placeName": {
+            "type": "string",
+            "example": "Căng-tin KTX"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "example": 21.028511
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "example": 105.854444
+          },
+          "wifiMetric": {
+            "$ref": "#/components/schemas/WifiMetric"
+          },
+          "score": {
+            "$ref": "#/components/schemas/LocationScore"
+          }
+        }
+      },
+      "NetworkInfoResponse": {
+        "type": "object",
+        "properties": {
+          "clientIp": {
+            "type": "string",
+            "example": "14.232.208.45"
+          },
+          "isp": {
+            "type": "string",
+            "example": "VNPT Telecom"
+          },
+          "dnsServer": {
+            "type": "string",
+            "example": "1.1.1.1"
+          },
+          "country": {
+            "type": "string",
+            "example": "Vietnam"
+          },
+          "city": {
+            "type": "string",
+            "example": "Hanoi"
+          }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "required": [
+          "id",
+          "defaultCategory",
+          "autoBenchmarkEnabled"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "usr_student_2026"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Sinh Viên BK"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "student@sis.hust.edu.vn"
+          },
+          "defaultCategory": {
+            "$ref": "#/components/schemas/UseCaseCategory"
+          },
+          "autoBenchmarkEnabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "signalAlertThresholdDbm": {
+            "type": "integer",
+            "example": -75
+          },
+          "benchmarkTimeoutMs": {
+            "type": "integer",
+            "example": 3000
+          }
+        }
+      },
+      "UpdateUserProfileRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "example": "Nguyễn Văn A"
+          },
+          "defaultCategory": {
+            "$ref": "#/components/schemas/UseCaseCategory"
+          },
+          "signalAlertThresholdDbm": {
+            "type": "integer",
+            "example": -75
+          },
+          "autoBenchmarkEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVALID_WIFI_METRIC"
+          },
+          "message": {
+            "type": "string",
+            "example": "Giá trị RSSI không hợp lệ (cần trong khoảng từ -100 đến -30 dBm)."
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Field 'rssi' must be <= -30"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

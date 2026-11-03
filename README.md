@@ -84,6 +84,7 @@ Toàn bộ tài liệu chi tiết của dự án được lưu trữ quy củ tr
 
 ### 🏛️ Kiến Trúc & Thiết Kế
 * 🏛️ [architecture.md](docs/architecture.md): Sơ đồ luồng hệ thống tương tác bằng Mermaid và hình ảnh trực quan.
+* 📜 [swagger.yaml](docs/swagger.yaml) / [swagger.json](docs/swagger.json): Đặc tả Swagger / OpenAPI 3.0 RESTful API của hệ thống.
 * 📂 [project_structure.md](docs/project_structure.md): Chi tiết cấu trúc thư mục, trách nhiệm module theo Clean Architecture.
 * 🌟 [features_docs.md](docs/features_docs.md): Đặc tả chi tiết các tính năng cốt lõi (Live Radar, 1-Tap Benchmark, Scoring Engine).
 * 🗄️ [data_schema.md](docs/data_schema.md): Đặc tả lược đồ dữ liệu và mô hình Domain/Data.
