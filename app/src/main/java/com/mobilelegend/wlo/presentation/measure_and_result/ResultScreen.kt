@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilelegend.wlo.domain.model.LocationScore
 import com.mobilelegend.wlo.presentation.components.ScoreCircleCard
+import com.mobilelegend.wlo.presentation.components.linkSpeedText
+import com.mobilelegend.wlo.presentation.components.pingText
 import com.mobilelegend.wlo.presentation.theme.CardBorder
 import com.mobilelegend.wlo.presentation.theme.DarkBackground
 import com.mobilelegend.wlo.presentation.theme.PrimaryBlue
@@ -185,7 +187,7 @@ fun ResultScreen(
         MetricDetailRow(
             icon = Icons.Default.NetworkCheck,
             title = "Độ trễ Ping ICMP/Socket",
-            rawValue = "${score.rawPingMs} ms",
+            rawValue = pingText(score.rawPingMs, score.pingSuccessful),
             normalizedScore = score.normalizedPingScore,
             color = PrimaryBlue
         )
@@ -204,8 +206,8 @@ fun ResultScreen(
 
         MetricDetailRow(
             icon = Icons.Default.Speed,
-            title = "Tốc độ đường truyền LinkSpeed",
-            rawValue = "${score.rawLinkSpeedMbps} Mbps",
+            title = "Tốc độ liên kết Wi-Fi",
+            rawValue = linkSpeedText(score.rawLinkSpeedMbps),
             normalizedScore = score.normalizedSpeedScore,
             color = SignalYellow
         )

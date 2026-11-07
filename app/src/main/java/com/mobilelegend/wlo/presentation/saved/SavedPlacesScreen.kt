@@ -18,11 +18,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Coffee
-import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.WorkOutline
@@ -49,6 +49,8 @@ import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.PlaceIconType
 import com.mobilelegend.wlo.presentation.components.PulseWaveIcon
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
+import com.mobilelegend.wlo.presentation.components.linkSpeedText
+import com.mobilelegend.wlo.presentation.components.pingText
 import com.mobilelegend.wlo.presentation.measure_and_result.SavedSpotItem
 import com.mobilelegend.wlo.presentation.measure_and_result.SessionHistoryBottomSheetContent
 import com.mobilelegend.wlo.presentation.theme.AppBackground
@@ -385,20 +387,19 @@ private fun SavedPlaceRowCard(
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Outlined.FileDownload,
+                        imageVector = Icons.Filled.Wifi,
                         contentDescription = null,
                         tint = TextMuted,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = "${place.downloadMbps} Mbps",
+                        text = "Liên kết Wi-Fi: ${linkSpeedText(place.linkSpeedMbps)}",
                         fontSize = 12.sp,
                         color = TextSecondary
                     )
@@ -413,7 +414,7 @@ private fun SavedPlaceRowCard(
                     )
                     Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = "${place.pingMs} ms",
+                        text = pingText(place.pingMs, place.pingSuccessful),
                         fontSize = 12.sp,
                         color = TextSecondary
                     )

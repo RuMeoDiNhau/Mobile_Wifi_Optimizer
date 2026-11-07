@@ -21,20 +21,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.AccessTime
-import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.mobilelegend.wlo.domain.model.LocationScore
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +51,7 @@ import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.PermissionBanner
 import com.mobilelegend.wlo.presentation.components.PulseWaveIcon
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
+import com.mobilelegend.wlo.presentation.components.MISSING_METRIC
 import com.mobilelegend.wlo.presentation.live_radar.LiveRadarViewModel
 import com.mobilelegend.wlo.presentation.theme.AccentEmerald
 import com.mobilelegend.wlo.presentation.theme.AppBackground
@@ -78,78 +75,26 @@ fun NetworkMeasureScreen(
     inspectedPlace: WifiPlaceItem?,
     onOpenLocationSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
-    onScoreMeasured: (Int) -> Unit,
+    onMeasureCurrentNetwork: () -> Unit,
+    onScoreMeasured: (LocationScore) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val radarState by liveRadarViewModel.uiState.collectAsStateWithLifecycle()
     val measureState by measureViewModel.uiState.collectAsStateWithLifecycle()
 
-    var lastMeasureTimeText by remember { mutableStateOf("Hôm nay, 09:42") }
-
     val completedScore = (measureState.status as? MeasureStatus.Completed)?.score
-    val isMeasuring = measureState.status is MeasureStatus.Measuring
-
     LaunchedEffect(completedScore) {
-        if (completedScore != null && completedScore.finalScore > 0) {
-            onScoreMeasured(completedScore.finalScore)
-            val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-            lastMeasureTimeText = "Hôm nay, ${sdf.format(Date())}"
-        }
+        completedScore?.let(onScoreMeasured)
     }
-
-    // Lấy thông số hiển thị (kết hợp dữ liệu thực tế hoặc thông số mẫu chuẩn theo UI)
-    val displaySsid = when {
-        inspectedPlace != null -> inspectedPlace.ssid
-        radarState.isWifiConnected &&
-            radarState.radarData.ssid.isNotBlank() &&
-            !radarState.radarData.ssid.contains("unknown", ignoreCase = true) &&
-            !radarState.radarData.ssid.contains("Đang quét", ignoreCase = true) -> radarState.radarData.ssid
-        else -> "The Workshop Guest"
-    }
-
-    val displayScore = when {
-        completedScore != null && completedScore.finalScore > 0 -> completedScore.finalScore
-        inspectedPlace != null -> inspectedPlace.score
-        radarState.isWifiConnected && radarState.radarData.signalPercentage > 0 -> radarState.radarData.signalPercentage
-        else -> 92
-    }
-
-    val displayDownloadMbps = when {
-        completedScore != null && completedScore.rawLinkSpeedMbps > 0 -> completedScore.rawLinkSpeedMbps
-        inspectedPlace != null -> inspectedPlace.downloadMbps
-        radarState.isWifiConnected && radarState.radarData.linkSpeedMbps > 0 -> radarState.radarData.linkSpeedMbps
-        else -> 128
-    }
-
-    val displayUploadMbps = when {
-        completedScore != null && completedScore.rawLinkSpeedMbps > 0 -> (completedScore.rawLinkSpeedMbps * 0.35f).toInt().coerceAtLeast(12)
-        inspectedPlace != null -> inspectedPlace.uploadMbps
-        else -> 42
-    }
-
-    val displayPingMs = when {
-        completedScore != null && completedScore.rawPingMs in 1..999 -> completedScore.rawPingMs.toInt()
-        inspectedPlace != null -> inspectedPlace.pingMs
-        else -> 12
-    }
-
-    val statusHeadline = when (val st = measureState.status) {
-        is MeasureStatus.Measuring -> "Đang đo chất lượng..."
-        is MeasureStatus.Completed -> if (st.score.finalScore > 0) st.score.summaryText else "Kết nối rất tốt"
-        else -> if (displayScore >= 85) "Kết nối rất tốt" else if (displayScore >= 70) "Kết nối ổn định" else "Kết nối trung bình"
-    }
-
-    val statusSubtitle = when (val st = measureState.status) {
-        is MeasureStatus.Measuring -> st.currentStepText
-        else -> "Phù hợp cho họp video, làm việc và phát video 4K"
-    }
+    val isMeasuring = measureState.status is MeasureStatus.Measuring
+    val content = networkMeasureContent(measureState.status, radarState, inspectedPlace)
+    val blockReason = measurementBlockReason(radarState)
+    val lastMeasureTimeText = content.measuredAtMillis?.let {
+        SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date(it))
+    } ?: MISSING_METRIC
 
     val animatedGaugeProgress by animateFloatAsState(
-        targetValue = if (isMeasuring) {
-            (measureState.status as? MeasureStatus.Measuring)?.progress ?: 0.6f
-        } else {
-            (displayScore / 100f).coerceIn(0.1f, 1f)
-        },
+        targetValue = content.progress,
         animationSpec = tween(durationMillis = 600),
         label = "MeasureGaugeProgress"
     )
@@ -164,28 +109,19 @@ fun NetworkMeasureScreen(
     ) {
         // 1. Header
         AppTopHeader(
-            overline = "KIỂM TRA KẾT NỐI",
-            title = "Đo chất lượng mạng"
+            overline = if (inspectedPlace != null) "THÔNG TIN ĐỊA ĐIỂM" else "KIỂM TRA KẾT NỐI",
+            title = if (inspectedPlace != null) "Chi tiết Wi-Fi địa điểm" else "Đo chất lượng mạng"
         )
 
         Spacer(modifier = Modifier.height(18.dp))
 
         // Cảnh báo quyền vị trí nếu thiếu
         if (!radarState.isLocationPermissionGranted) {
-            PermissionBanner(
-                message = "Cấp quyền Vị trí để ứng dụng đọc trực tiếp tên mạng Wi-Fi (SSID) và cường độ dBm.",
-                buttonText = "Cấp quyền",
-                onActionClick = onOpenAppSettings
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            PermissionBanner("Cần cấp quyền vị trí để đọc Wi-Fi", "Cấp quyền", onOpenAppSettings)
         } else if (!radarState.isGpsEnabled) {
-            PermissionBanner(
-                message = "Bật định vị GPS để Android cho phép hiển thị tên mạng Wi-Fi hiện tại.",
-                buttonText = "Bật GPS",
-                onActionClick = onOpenLocationSettings
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            PermissionBanner("Cần bật dịch vụ vị trí", "Bật GPS", onOpenLocationSettings)
         }
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 2. Main Dark Green Gauge Card
         Box(
@@ -229,7 +165,7 @@ fun NetworkMeasureScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = displaySsid,
+                        text = content.ssid,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White
@@ -291,7 +227,7 @@ fun NetworkMeasureScreen(
                             strokeWidthDp = 2.dp
                         )
                         Text(
-                            text = "$displayScore",
+                            text = content.score?.toString() ?: MISSING_METRIC,
                             fontSize = 54.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White,
@@ -310,7 +246,7 @@ fun NetworkMeasureScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = statusHeadline,
+                    text = content.headline,
                     fontSize = 19.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -318,7 +254,7 @@ fun NetworkMeasureScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = statusSubtitle,
+                    text = content.description,
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.72f),
                     textAlign = TextAlign.Center
@@ -326,12 +262,23 @@ fun NetworkMeasureScreen(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Nút "Đo lại"
-                Button(
-                    onClick = {
-                        measureViewModel.startBenchmark(radarState.selectedCategory)
+                Text(
+                    text = if (inspectedPlace != null) {
+                        "Nút bên dưới đo Wi-Fi thiết bị đang kết nối, không đo từ xa địa điểm này."
+                    } else {
+                        "Phép đo áp dụng cho Wi-Fi thiết bị đang kết nối."
                     },
-                    enabled = !isMeasuring,
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center
+                )
+                blockReason?.let {
+                    Text(text = it, color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onMeasureCurrentNetwork,
+                    enabled = !isMeasuring && blockReason == null,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SurfaceWhite,
                         contentColor = TextPrimary,
@@ -348,7 +295,7 @@ fun NetworkMeasureScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isMeasuring) "Đang đo..." else "Đo lại",
+                        text = if (isMeasuring) "Đang đo..." else "Đo mạng đang kết nối",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -359,33 +306,30 @@ fun NetworkMeasureScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 3. Hàng 3 Thẻ Thông số (Tải xuống, Tải lên, Độ trễ)
+        // Chỉ hiển thị thông số thực sự được thu thập.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             SpeedMetricSmallCard(
-                icon = Icons.Outlined.FileDownload,
-                label = "Tải xuống",
-                value = "$displayDownloadMbps",
-                unit = "Mbps",
-                modifier = Modifier.weight(1f)
-            )
-            SpeedMetricSmallCard(
-                icon = Icons.AutoMirrored.Filled.ArrowForward,
-                label = "Tải lên",
-                value = "$displayUploadMbps",
-                unit = "Mbps",
+                icon = Icons.Default.Wifi,
+                label = "Tốc độ liên kết Wi-Fi",
+                value = content.linkSpeed,
                 modifier = Modifier.weight(1f)
             )
             SpeedMetricSmallCard(
                 icon = Icons.Outlined.AccessTime,
-                label = "Độ trễ",
-                value = "$displayPingMs",
-                unit = "ms",
+                label = "Độ trễ TCP",
+                value = content.ping,
                 modifier = Modifier.weight(1f)
             )
         }
+        Text(
+            text = "Chưa đo tốc độ tải lên/tải xuống Internet.",
+            fontSize = 12.sp,
+            color = TextSecondary,
+            modifier = Modifier.padding(top = 8.dp)
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -411,6 +355,7 @@ fun NetworkMeasureScreen(
             ) {
                 Text(
                     text = "Chi tiết kết nối",
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary
@@ -423,7 +368,7 @@ fun NetworkMeasureScreen(
                         .padding(horizontal = 12.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = "Ổn định",
+                        text = content.statusLabel,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryGreen
@@ -435,13 +380,17 @@ fun NetworkMeasureScreen(
 
             ConnectionDetailRow(
                 label = "Nhà mạng",
-                value = inspectedPlace?.isp ?: "FPT Telecom"
+                value = content.isp
             )
             ConnectionDivider()
             ConnectionDetailRow(
                 label = "Địa điểm",
-                value = if (inspectedPlace != null) "${inspectedPlace.district}, TP.HCM" else "Quận 1, TP.HCM"
+                value = content.placeName
             )
+            ConnectionDivider()
+            ConnectionDetailRow(label = "BSSID", value = content.bssid)
+            ConnectionDivider()
+            ConnectionDetailRow(label = "Nhu cầu lúc đo", value = content.category?.title ?: MISSING_METRIC)
             ConnectionDivider()
             ConnectionDetailRow(
                 label = "Thời gian đo",
@@ -456,7 +405,6 @@ private fun SpeedMetricSmallCard(
     icon: ImageVector,
     label: String,
     value: String,
-    unit: String,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -486,22 +434,13 @@ private fun SpeedMetricSmallCard(
             color = TextMuted
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                text = value,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-                text = unit,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextMuted,
-                modifier = Modifier.padding(bottom = 3.dp)
-            )
-        }
+        Text(
+            text = value,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = TextPrimary,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -524,6 +463,8 @@ private fun ConnectionDetailRow(
         )
         Text(
             text = value,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
+            textAlign = TextAlign.End,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary

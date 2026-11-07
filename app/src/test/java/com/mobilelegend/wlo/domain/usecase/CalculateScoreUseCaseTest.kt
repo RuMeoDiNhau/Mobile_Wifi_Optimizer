@@ -194,7 +194,7 @@ class CalculateScoreUseCaseTest {
 
         assertTrue("Điểm học tập phải >= 70", score.finalScore >= 70)
         assertTrue("Băng thông tốt phải được khuyến nghị", score.isRecommended)
-        assertEquals("Băng thông tải File tốc độ cao", score.summaryText)
+        assertEquals("Liên kết Wi-Fi tốt", score.summaryText)
     }
 
     @Test
@@ -215,7 +215,7 @@ class CalculateScoreUseCaseTest {
 
         val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.STUDY_DOWNLOAD)
 
-        assertEquals("Đáp ứng duyệt Web & Đọc sách", score.summaryText)
+        assertEquals("Liên kết Wi-Fi trung bình", score.summaryText)
         assertFalse(score.isRecommended)
     }
 
@@ -238,7 +238,7 @@ class CalculateScoreUseCaseTest {
         val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.STUDY_DOWNLOAD)
 
         assertTrue("Điểm phải thấp khi tốc độ cực yếu", score.finalScore < 50)
-        assertEquals("Tốc độ tải yếu", score.summaryText)
+        assertEquals("Liên kết Wi-Fi yếu hoặc chưa xác định", score.summaryText)
         assertFalse(score.isRecommended)
     }
 

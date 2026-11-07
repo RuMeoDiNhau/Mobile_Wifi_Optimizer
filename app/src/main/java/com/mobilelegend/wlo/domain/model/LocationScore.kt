@@ -14,5 +14,7 @@ data class LocationScore(
     val isRecommended: Boolean,          // Có đạt chuẩn (Vùng xanh) hay không
     val rawRssi: Int,                    // Thông số dBm gốc
     val rawPingMs: Long,                 // Thông số Ping gốc
-    val rawLinkSpeedMbps: Int            // Thông số Mbps gốc
+    val rawLinkSpeedMbps: Int,           // Tốc độ liên kết Wi-Fi, không phải tốc độ Internet
+    val pingSuccessful: Boolean? = null, // null: chưa có kết quả, false: không phản hồi
+    val measurement: MeasurementContext? = null
 )

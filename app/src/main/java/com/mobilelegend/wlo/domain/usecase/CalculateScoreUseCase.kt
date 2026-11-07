@@ -63,7 +63,8 @@ class CalculateScoreUseCase {
                 isRecommended = false,
                 rawRssi = wifiMetric.rssi,
                 rawPingMs = pingResult.latencyMs,
-                rawLinkSpeedMbps = wifiMetric.linkSpeedMbps
+                rawLinkSpeedMbps = wifiMetric.linkSpeedMbps,
+                pingSuccessful = null
             )
         }
 
@@ -79,7 +80,8 @@ class CalculateScoreUseCase {
                 isRecommended = false,
                 rawRssi = wifiMetric.rssi,
                 rawPingMs = pingResult.latencyMs,
-                rawLinkSpeedMbps = wifiMetric.linkSpeedMbps
+                rawLinkSpeedMbps = wifiMetric.linkSpeedMbps,
+                pingSuccessful = pingResult.isSuccess
             )
         }
 
@@ -112,7 +114,8 @@ class CalculateScoreUseCase {
             isRecommended = isRecommended,
             rawRssi = wifiMetric.rssi,
             rawPingMs = pingResult.latencyMs,
-            rawLinkSpeedMbps = wifiMetric.linkSpeedMbps
+            rawLinkSpeedMbps = wifiMetric.linkSpeedMbps,
+            pingSuccessful = pingResult.isSuccess
         )
     }
 
@@ -149,20 +152,20 @@ class CalculateScoreUseCase {
             UseCaseCategory.STUDY_DOWNLOAD -> {
                 if (finalScore >= 70 && linkSpeedMbps >= 50) {
                     Triple(
-                        "Băng thông tải File tốc độ cao",
-                        "Tốc độ kết nối đạt ${linkSpeedMbps}Mbps. Tải tài liệu học tập, slide bài giảng và video 4K siêu nhanh.",
+                        "Liên kết Wi-Fi tốt",
+                        "Tốc độ liên kết Wi-Fi đạt ${linkSpeedMbps} Mbps. Chưa đo tốc độ tải lên/tải xuống Internet.",
                         true
                     )
                 } else if (finalScore >= 50) {
                     Triple(
-                        "Đáp ứng duyệt Web & Đọc sách",
-                        "Tốc độ ${linkSpeedMbps}Mbps vừa đủ để đọc tài liệu online và xem video 1080p.",
+                        "Liên kết Wi-Fi trung bình",
+                        "Tốc độ liên kết Wi-Fi: ${linkSpeedMbps} Mbps. Chưa đủ dữ liệu để kết luận tốc độ tải Internet.",
                         false
                     )
                 } else {
                     Triple(
-                        "Tốc độ tải yếu",
-                        "Băng thông bị giới hạn (${linkSpeedMbps}Mbps). Hãy di chuyển tới vị trí gần Router hơn để tải tệp lớn.",
+                        "Liên kết Wi-Fi yếu hoặc chưa xác định",
+                        "Hãy kiểm tra kết nối hoặc di chuyển gần router hơn. Chưa đo tốc độ tải Internet.",
                         false
                     )
                 }

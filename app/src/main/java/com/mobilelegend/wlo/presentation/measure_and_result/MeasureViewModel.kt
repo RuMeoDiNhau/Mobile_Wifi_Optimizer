@@ -3,6 +3,7 @@ package com.mobilelegend.wlo.presentation.measure_and_result
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilelegend.wlo.domain.model.LocationScore
+import com.mobilelegend.wlo.domain.model.MeasurementLocation
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.usecase.PerformBenchmarkUseCase
 import kotlinx.coroutines.delay
@@ -26,8 +27,8 @@ class MeasureViewModel(
     /**
      * Bắt đầu quy trình kiểm định 1-chạm kéo dài 3 giây.
      */
-    fun startBenchmark(category: UseCaseCategory) {
-        _uiState.update { it.copy(selectedCategory = category) }
+    fun startBenchmark(category: UseCaseCategory, location: MeasurementLocation? = null) {
+        _uiState.update { it.copy(selectedCategory = category, status = MeasureStatus.Measuring(0f, "Đang chuẩn bị đo...")) }
 
         viewModelScope.launch {
             try {
@@ -41,7 +42,7 @@ class MeasureViewModel(
                 _uiState.update {
                     it.copy(status = MeasureStatus.Measuring(0.66f, "Đang gửi gói tin Socket kiểm tra Ping 1.1.1.1..."))
                 }
-                val score = performBenchmarkUseCase(category)
+                val score = performBenchmarkUseCase(category, location)
                 delay(800)
 
                 // Giai đoạn 3: Tính toán điểm số (0.5s)
@@ -52,9 +53,10 @@ class MeasureViewModel(
 
                 // Hoàn tất và tự động thêm vào lịch sử phiên
                 val autoSpot = SavedSpotItem(
-                    id = UUID.randomUUID().toString(),
+                    id = requireNotNull(score.measurement).id,
                     spotName = "Lượt đo #${_uiState.value.savedSpots.size + 1} (${category.title})",
-                    score = score
+                    score = score,
+                    timestamp = requireNotNull(score.measurement).measuredAtMillis
                 )
                 _uiState.update {
                     it.copy(

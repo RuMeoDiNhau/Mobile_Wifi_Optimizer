@@ -1,5 +1,7 @@
 # Ghi chú review và hướng sửa lỗi Mobile_Wifi_Optimizer
 
+> **Cập nhật BUG-01–03:** Sửa hiển thị dữ liệu thiếu/lỗi, dùng đúng LinkSpeed và gắn kết quả với snapshot mạng, thời gian, vị trí. Thêm 29 test hồi quy. Chưa chạy build/lint/test vì không có runner độc lập và yêu cầu không test trên máy người dùng. Xem [báo cáo](tests/README.md).
+
 Tài liệu tổng hợp các vấn đề phát hiện khi đọc source để nhóm xem xét và sửa sau. Các mục bên dưới là đề xuất; chưa có thay đổi nào đối với code ứng dụng trong quá trình lập tài liệu này.
 
 - **Ngày tổng hợp:** 03/11/2026.
@@ -296,4 +298,3 @@ RSSI có dao động tự nhiên; không yêu cầu giá trị tăng/giảm đ�
 - [Network.getSocketFactory — gắn Socket với một mạng](https://developer.android.com/reference/android/net/Network#getSocketFactory()).
 - [ViewModel Scoping APIs — phạm vi và cách lấy ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-apis).
 - [Auto Backup — cú pháp domain/path](https://developer.android.com/identity/data/autobackup).
-

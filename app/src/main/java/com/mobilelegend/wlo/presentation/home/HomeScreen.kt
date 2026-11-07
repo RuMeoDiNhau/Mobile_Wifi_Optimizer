@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Coffee
-import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SportsEsports
@@ -65,6 +64,8 @@ import com.mobilelegend.wlo.presentation.components.PlaceIconType
 import com.mobilelegend.wlo.presentation.components.PulseWaveIcon
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
+import com.mobilelegend.wlo.presentation.components.linkSpeedText
+import com.mobilelegend.wlo.presentation.components.pingText
 import com.mobilelegend.wlo.presentation.theme.AccentEmerald
 import com.mobilelegend.wlo.presentation.theme.AppBackground
 import com.mobilelegend.wlo.presentation.theme.CardBorder
@@ -649,9 +650,8 @@ private fun RankedPlaceCard(
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -671,14 +671,14 @@ private fun RankedPlaceCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Outlined.FileDownload,
+                        imageVector = Icons.Filled.Wifi,
                         contentDescription = null,
                         tint = TextMuted,
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
-                        text = "${place.downloadMbps} Mbps",
+                        text = "Liên kết Wi-Fi: ${linkSpeedText(place.linkSpeedMbps)}",
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
@@ -693,7 +693,7 @@ private fun RankedPlaceCard(
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Text(
-                        text = "${place.pingMs} ms",
+                        text = pingText(place.pingMs, place.pingSuccessful),
                         fontSize = 11.sp,
                         color = TextSecondary
                     )

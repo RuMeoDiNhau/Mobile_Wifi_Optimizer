@@ -73,7 +73,7 @@ class PerformBenchmarkUseCaseTest {
 
         assertTrue(result.finalScore >= 90)
         assertTrue(result.isRecommended)
-        assertEquals("Băng thông tải File tốc độ cao", result.summaryText)
+        assertEquals("Liên kết Wi-Fi tốt", result.summaryText)
     }
 
     @Test

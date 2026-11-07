@@ -61,6 +61,8 @@ import com.mobilelegend.wlo.data.sensor.UserGeoCoordinate
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
+import com.mobilelegend.wlo.presentation.components.linkSpeedText
+import com.mobilelegend.wlo.presentation.components.pingText
 import com.mobilelegend.wlo.presentation.theme.AccentEmerald
 import com.mobilelegend.wlo.presentation.theme.AppBackground
 import com.mobilelegend.wlo.presentation.theme.CardBorder
@@ -457,7 +459,7 @@ fun WifiMapScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "${selectedPlace.downloadMbps} Mbps · ${selectedPlace.pingMs} ms · ${selectedPlace.measurementsToday} lượt đo hôm nay",
+                        text = "Liên kết Wi-Fi: ${linkSpeedText(selectedPlace.linkSpeedMbps)} · ${pingText(selectedPlace.pingMs, selectedPlace.pingSuccessful)}",
                         fontSize = 12.sp,
                         color = TextMuted
                     )

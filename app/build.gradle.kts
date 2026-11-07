@@ -53,6 +53,7 @@ android {
             it.jvmArgs("-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8")
         }
     }
+    sourceSets.getByName("test").java.srcDir(rootProject.file("tests/src/test/kotlin"))
 }
 
 dependencies {

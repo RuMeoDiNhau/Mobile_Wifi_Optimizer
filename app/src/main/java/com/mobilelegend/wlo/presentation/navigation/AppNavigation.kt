@@ -22,8 +22,9 @@ import androidx.navigation.navArgument
 import com.mobilelegend.wlo.core.permissions.PermissionHelper
 import com.mobilelegend.wlo.data.sensor.DeviceLocationProvider
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
+import com.mobilelegend.wlo.domain.model.MeasurementLocation
+import com.mobilelegend.wlo.presentation.components.toWifiPlace
 import com.mobilelegend.wlo.presentation.components.DefaultWifiPlaces
-import com.mobilelegend.wlo.presentation.components.PlaceIconType
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.WloBottomNavigationBar
@@ -134,7 +135,7 @@ fun AppNavigation(
                     onStartMeasureHere = {
                         inspectedPlace = null
                         liveRadarViewModel.selectCategory(selectedNeed.category)
-                        measureViewModel.startBenchmark(selectedNeed.category)
+                        measureViewModel.startBenchmark(selectedNeed.category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
                         navigateToTab(Screen.NetworkMeasure)
                     },
                     onPlaceClick = { place ->
@@ -165,40 +166,17 @@ fun AppNavigation(
                     inspectedPlace = inspectedPlace,
                     onOpenLocationSettings = onOpenLocationSettings,
                     onOpenAppSettings = onOpenAppSettings,
-                    onScoreMeasured = { newScore ->
-                        areaScore = newScore
-                        val completed = (measureState.status as? MeasureStatus.Completed)?.score
-                        if (completed != null && completed.finalScore > 0) {
-                            val liveSsid = radarState.radarData.ssid.takeIf {
-                                it.isNotBlank() && !it.contains("unknown", ignoreCase = true) && !it.contains("Đang quét", ignoreCase = true)
-                            } ?: "Wi-Fi Tại Vị Trí Của Bạn"
-
-                            val measuredPlace = WifiPlaceItem(
-                                id = "measured_user_spot",
-                                rank = 1,
-                                name = liveSsid,
-                                district = "Vị trí hiện tại",
-                                distanceText = "10 m",
-                                score = completed.finalScore,
-                                qualityLabel = if (completed.finalScore >= 85) "Rất tốt" else if (completed.finalScore >= 70) "Tốt" else "Trung bình",
-                                downloadMbps = completed.rawLinkSpeedMbps.coerceAtLeast(10),
-                                uploadMbps = (completed.rawLinkSpeedMbps * 0.35f).toInt().coerceAtLeast(5),
-                                pingMs = completed.rawPingMs.toInt().coerceIn(1, 999),
-                                measurementsToday = 1,
-                                isSaved = true,
-                                isFree = true,
-                                iconType = PlaceIconType.WORK,
-                                latitude = userLocation.latitude + 0.0004,
-                                longitude = userLocation.longitude + 0.0004,
-                                ssid = liveSsid,
-                                isp = "Mạng hiện tại"
-                            )
-
-                            val others = places.filterNot { it.id == "measured_user_spot" }
-                            places = (listOf(measuredPlace) + others).mapIndexed { index, item ->
-                                item.copy(rank = index + 1)
-                            }
+                    onScoreMeasured = { score ->
+                        areaScore = score.finalScore
+                        score.toWifiPlace()?.let { measuredPlace ->
+                            places = (listOf(measuredPlace) + places.filterNot { it.id == measuredPlace.id })
+                                .mapIndexed { index, place -> place.copy(rank = index + 1) }
                         }
+                    },
+                    onMeasureCurrentNetwork = {
+                        inspectedPlace = null
+                        liveRadarViewModel.selectCategory(selectedNeed.category)
+                        measureViewModel.startBenchmark(selectedNeed.category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
                     }
                 )
             }
