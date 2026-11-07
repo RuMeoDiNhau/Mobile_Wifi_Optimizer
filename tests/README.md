@@ -1,21 +1,95 @@
-# Kiểm thử BUG-01 đến BUG-06
+# Kiểm thử BUG-01 đến BUG-09
 
-**Đã sửa code và viết test; chưa chạy build/lint/unit test/UI test.**
-Phiên này chỉ có môi trường dùng chung trên máy người dùng. Theo yêu cầu không test trên máy người dùng, không chạy Gradle, ứng dụng, emulator, ADB, socket probe hay cài dependency.
+Ngày ghi nhận: **07/11/2026** (Asia/Saigon).
 
-## Thay đổi cần kiểm chứng
+## Trạng thái thực tế
 
-- BUG-01: phân biệt chưa đo, thất bại và thành công; giữ điểm 0, timeout và trường thiếu.
-- BUG-02: chỉ hiển thị LinkSpeed; bỏ download/upload suy diễn và giá trị sàn.
-- BUG-03: snapshot mạng, thời gian, tọa độ và nhu cầu đi cùng kết quả; màn chi tiết không trộn mạng đang xem với kết quả khác.
-- BUG-04: ViewModel quản lý lịch sử theo ID; lưu/bookmark chỉ sửa bản ghi, không khôi phục bản ghi đã xóa. Bản đồ đọc từ lịch sử.
-- BUG-05: socket gắn một Android Network; kiểm tra mất/đổi mạng/AP và đóng phiên trong finally.
-- BUG-06: một job, mã thế hệ, hủy socket và chờ cleanup; Back/tab/onStop hủy lượt đo. ViewModelProvider quản lý vòng đời.
+**Đã sửa code và viết test; chưa chạy build hoặc test.** Phiên làm việc chỉ cung cấp shell Windows tại workspace dùng chung trên máy người dùng. Không có runner JDK/Android độc lập của trợ lý để thực thi. Theo yêu cầu “đừng test ở máy tôi”, không chạy Gradle, ứng dụng, emulator, ADB, socket probe hoặc cài dependency trên máy này.
+
+Không có kết quả `BUILD SUCCESSFUL`, JUnit XML hoặc ảnh chạy ứng dụng để khẳng định test đã đạt. Đọc source, tìm tham chiếu, đếm khai báo và kiểm tra diff là **rà soát tĩnh**, không thay thế biên dịch hoặc thực thi test. Các tuyên bố “100% Passed” trong tài liệu cũ không phải kết quả của đợt sửa này.
+
+| Hạng mục | Kết quả |
+| --- | --- |
+| Rà luồng cảm biến → phiên mạng → probing → scoring → ViewModel → UI/navigation | Đã đọc và đối chiếu source |
+| Kiểm tra whitespace bằng `git diff --check` | Exit code 0; không có lỗi whitespace |
+| BUG-01–03 | Giữ lại thay đổi và 29 test từ lượt trước |
+| BUG-04–06 | Thêm 36 test trong 3 file; cập nhật các repository giả theo API phiên đo |
+| BUG-07–09 | Thêm 31 test trong 3 file; cập nhật fixture quyền/readiness và dữ liệu vị trí |
+| Toàn bộ test hồi quy trong `tests/` | **96 phương thức `@Test`, 0 đã thực thi** |
+| Test có sẵn trong `app/src/test/` | **33 phương thức `@Test`, chưa chạy lại** |
+| Tổng số khai báo test | **129**, đếm từ source; chưa xác nhận Gradle discover |
+| Build / assemble / lint / unit test / UI test | **Chưa chạy** |
+| Wi-Fi, quyền Android, GPS, Back/tab/background thật | **Chưa kiểm chứng trên runtime** |
+
+## Thay đổi BUG-04–06 cần kiểm chứng
+
+### BUG-04: lịch sử thuộc ViewModel, giao diện chỉ đọc
+
+- Kết quả lưu snapshot gồm ID, thời gian hoàn tất, SSID/BSSID, Android network ID, tọa độ đầu lượt đo nếu có, nhu cầu và thông số. ViewModel ghi một lần theo ID; giữ ID đã ghi cả khi người dùng xóa bản ghi.
+- `saveSpotToHistory` đổi tên/đánh dấu lưu bản ghi hiện có. Không tạo UUID mới, không thay score/time/location bằng dữ liệu truyền lại, không khôi phục bản ghi đã xóa từ kết quả cũ.
+- Bản đồ dựng danh sách trực tiếp từ lịch sử trong ViewModel. Đã bỏ effect thêm kết quả khi mở lại tab; không có tọa độ thật thì không tạo điểm bản đồ.
+- Bỏ lưu chỉ đổi trạng thái bookmark; xóa lịch sử loại bản ghi khỏi nguồn dữ liệu bản đồ. Dữ liệu minh họa được giữ riêng.
+- ViewModel được lấy qua `ViewModelProvider` với dependency dùng application context, để giữ lịch sử khi Activity được tạo lại và có cơ chế dọn scope. Lịch sử vẫn chỉ ở RAM, không được lưu qua process death.
+
+### BUG-05: một mạng Wi-Fi cho toàn bộ phiên đo
+
+- Repository mở `WifiBenchmarkSession` có phạm vi và luôn đóng trong `finally`, kể cả lỗi hoặc hủy trong lúc chờ thông tin mạng.
+- Phiên giữ một Android `Network`; socket tạo bằng `network.socketFactory`. Không chuyển sang socket mặc định khi mất Wi-Fi.
+- Callback theo dõi mạng mặc định và thông tin AP. Android 12+ dùng `FLAG_INCLUDE_LOCATION_INFO`; phiên từ chối khi không đọc được định danh.
+- Guard so sánh network ID, SSID và BSSID; đã phát hiện thay đổi thì không phục hồi lượt đo dù mạng quay về A. Socket đang mở bị đóng khi mạng mất/đổi.
+- Kiểm tra lại định danh hiện tại trước/sau từng lần TCP connect, sau probing và sau tạo kết quả. RSSI/LinkSpeed của kết quả thuộc snapshot ban đầu, không trộn dữ liệu lần đọc sau.
+- Việc callback, quyền và đọc BSSID hoạt động trên từng thiết bị/API còn cần kiểm thử Android thật. Không coi các test guard giả là bằng chứng đã thử tắt Wi-Fi/chuyển 4G hoặc roaming phần cứng.
+
+### BUG-06: một tác vụ, hủy có dọn tài nguyên
+
+- ViewModel giữ một `benchmarkJob`; lần gọi mới bị từ chối cho đến khi job trước kết thúc cả phần cleanup.
+- Job khởi tạo lazy để gán quyền sở hữu trước khi chạy. Completion handler dọn cờ bận kể cả hủy trước khi coroutine bắt đầu.
+- Mỗi lượt có mã thế hệ; hủy/reset làm lượt cũ mất hiệu lực. `CancellationException` được xử lý riêng; kết quả hoặc lỗi về muộn không đổi UI/history.
+- `PingTester` đóng socket khi coroutine bị hủy và trong `finally`; session đóng socket còn giữ và gỡ callback.
+- Có nút “Hủy phép đo”. Rời màn đo bằng Back/tab, hủy graph hoặc Activity vào `onStop` đều yêu cầu hủy. Không tự bắt đầu lại lượt đo chỉ vì màn cũ được compose lại.
+- Bỏ các delay tiến trình giả; không chờ thêm 800/400 ms sau khi đã kiểm tra tính hợp lệ của kết quả. Chưa đặt cam kết tổng thời gian đúng 3 giây; BUG-12 vẫn cần xử lý riêng.
+- UI báo đã hủy và khóa lần đo mới trong lúc dọn kết nối. Điều hướng của màn cũ không được đưa người dùng tới kết quả nếu đã rời route đó.
+
+## Thay đổi BUG-01–03 được giữ lại
+
+- **BUG-01:** phân biệt Idle/chưa đủ điều kiện/Measuring/Failed/Completed; thêm Cancelled trong đợt này. Giữ điểm 0, thiếu dữ liệu hiện `—`. Timeout hiện “Không phản hồi”; ping thành công chậm vẫn hiện đúng số ms. Khuyến nghị chỉ dựa vào thông số có đủ dữ liệu.
+- **BUG-02:** dùng “Tốc độ liên kết Wi-Fi”, bỏ download/upload suy diễn và các giá trị sàn. Không đổi nhãn tốc độ download mẫu thành LinkSpeed. Các màn và lịch sử dùng chung formatter.
+- **BUG-03:** màn hình chọn một nguồn: địa điểm đang xem hoặc kết quả benchmark. Bấm đo mạng đang kết nối thoát chế độ xem địa điểm; không ghép tên B với thông số A.
+
+Tọa độ chỉ gắn vào lượt đo khi provider có fix mới/gần đúng còn đủ mới. Các ngưỡng và giới hạn được ghi trong phần BUG-07–09 dưới đây. Chưa xác nhận toàn bộ lỗi vòng đời/radar hoặc các BUG còn lại đã được giải quyết.
+
+## Thay đổi BUG-07–09 cần kiểm chứng
+
+### BUG-07: một bộ điều kiện bắt đầu đo
+
+- `benchmarkReadiness` dùng chung cho Trang chủ, tab Đo, Radar cũ, màn thử lại, ViewModel và use case. Nút bị khóa khi bận, không có Wi-Fi, thiếu quyền/dịch vụ vị trí, chưa có mẫu callback, thiếu định danh hoặc RSSI/LinkSpeed không hợp lệ.
+- ViewModel kiểm tra trước khi tạo job; use case kiểm tra lại khi thực thi, kiểm tra mẫu của phiên vừa mở trước probing và quyền trước khi chấp nhận kết quả. Quyền/mạng đổi sau khi nút được bật không được phép vượt qua kiểm tra thực thi.
+- Có lý do và hành động tương ứng: mở Wi-Fi, quyền ứng dụng hoặc dịch vụ vị trí. Trạng thái chờ dữ liệu và trạng thái bận không giả làm lỗi GPS.
+- Mọi lối bắt đầu đo lấy vị trí tại lần bấm nếu có. Vị trí chưa xác định không ngăn đo Wi-Fi; kết quả đó chỉ ở lịch sử, không có marker giả.
+
+### BUG-08: quyền bản đồ và quyền đọc Wi-Fi
+
+- `WifiAccessState` tách quyền bản đồ (Fine hoặc Coarse) với quyền đọc định danh Wi-Fi. Policy: API 26–28 chấp nhận Fine/Coarse; API 29+ cần Fine; API 28+ cần bật dịch vụ vị trí.
+- Android 12+ lấy `WifiInfo` từ `NetworkCallback` có `FLAG_INCLUDE_LOCATION_INFO`. Không lấy SSID/BSSID từ kết quả đồng bộ `getNetworkCapabilities()`. API cũ dùng `WifiManager.connectionInfo`.
+- Cache gắn với network ID và thế hệ đăng ký. Đổi mạng, mất mạng, thay quyền/dịch vụ vị trí hoặc quay lại foreground làm dữ liệu cũ mất hiệu lực; callback của đăng ký cũ không được khôi phục dữ liệu đó.
+- SSID/BSSID bị ẩn có trạng thái riêng. Không đổi SSID chưa biết thành tên “Cần bật GPS”.
+- Bỏ yêu cầu/khai báo `NEARBY_WIFI_DEVICES`: app hiện chỉ đọc Wi-Fi, không gọi API hotspot/P2P/Aware/RTT cần quyền này. Nearby không thay thế quyền vị trí cho SSID/BSSID. Cần thử Android 13+ cả bản cài mới và nâng cấp từ bản đã từng xin Nearby.
+
+### BUG-09: tọa độ, độ tin cậy và dữ liệu minh họa
+
+- Không di chuyển quán/thư viện mẫu quanh người dùng. `placesWithDistances` chỉ cập nhật nhãn khoảng cách; không sửa ID, tọa độ hoặc snapshot.
+- Bản đồ mặc định ẩn demo; chỉ hiện khi bật “Hiện dữ liệu minh họa”, với ghim xám và nhãn rõ. Trang chủ/Đã lưu chỉ lấy điểm có measurement thật. Bỏ fallback đưa dữ liệu mẫu trở lại Đã lưu; cho phép danh sách rỗng.
+- Tâm bản đồ mặc định không tạo marker người dùng. Fix mới/gần đúng được ghi kèm thời gian, accuracy và confidence; fix cũ, giả lập hoặc không hợp lệ không gắn vào lượt đo.
+- Ngưỡng hiện tại: tuổi fix tối đa **120 giây** theo đồng hồ monotonic; accuracy trên **100 m** hoặc quyền Coarse được đánh dấu gần đúng. Đây là policy ứng dụng, không phải bảo đảm độ chính xác GPS. Không loại vị trí thật chỉ vì nằm trong khu vực Mountain View.
+- Một yêu cầu location tại một thời điểm; timeout **10 giây**, hủy listener khi rời foreground/dispose. Camera chỉ recenter theo cập nhật vị trí hợp lệ sau yêu cầu. Cleanup/timeout Android thật chưa được thực thi kiểm chứng.
+- Mỗi lần đo giữ ID riêng và tọa độ nguyên gốc; hai điểm A/B cùng tồn tại. Bỏ các thống kê mẫu 8 điểm/124 lượt và cộng thêm 12 lượt trong luồng đã chỉnh. Lịch sử vẫn ở RAM.
+
+Thay đổi trạng thái rỗng, age/accuracy và cleanup có chạm một phần BUG-14/15/18; chưa xác nhận runtime cho toàn bộ các BUG này.
 
 
 ## Bộ test hồi quy
 
-Các test nằm trong tests/src/test/kotlin/com/mobilelegend/wlo/regression và đã nối vào test source set của app.
+Thư mục `tests/src/test/kotlin/com/mobilelegend/wlo/regression/` đã được nối vào test source set của module app. Dùng JUnit 4 và kotlinx-coroutines-test đã có trong project.
 
 | File | Số test | Phạm vi | Trạng thái |
 | --- | ---: | --- | --- |
@@ -25,22 +99,106 @@ Các test nằm trong tests/src/test/kotlin/com/mobilelegend/wlo/regression và 
 | [MeasurementOwnershipTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/MeasurementOwnershipTest.kt) | 17 | Xem/lưu/xóa/bookmark, snapshot bất biến, bấm liên tục, hủy trước dispatch/trong setup/probe, chờ cleanup, reset và kết quả/lỗi muộn, ViewModelStore, dispatcher chạy ngay | Chưa chạy |
 | [NetworkSessionRegressionTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/NetworkSessionRegressionTest.kt) | 11 | Định danh ẩn, mất/đổi mạng/AP, A→B→A, callback báo mất, kiểm tra trước probing/sau scoring, giữ snapshot và đóng phiên giả | Chưa chạy |
 | [PingCancellationTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/PingCancellationTest.kt) | 8 | Dùng socket factory truyền vào, đóng khi thành công/lỗi/hủy, chặn batch đổi mạng, lỗi binding, hủy ngay trước trả kết quả, số gói không hợp lệ | Chưa chạy |
+| [WifiReadinessTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/WifiReadinessTest.kt) | 14 | Quyền API 26–34; busy/offline/chờ/ẩn định danh/sensor lỗi; UI và ViewModel cùng lý do; use case kiểm tra lại; thu hồi/cấp lại quyền | Chưa chạy |
+| [WifiSnapshotCacheTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/WifiSnapshotCacheTest.kt) | 5 | Cache theo network ID, đổi mạng, callback mất mạng cũ, đăng ký cũ sau thay quyền và mẫu redacted | Chưa chạy |
+| [LocationDataPolicyTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationDataPolicyTest.kt) | 12 | Tâm mặc định, metadata, gần đúng/cũ/mock/invalid, Mountain View thật, không kéo demo, lọc demo, khoảng cách và hai lượt A/B | Chưa chạy |
 
-Tổng: **65 test hồi quy + 33 test cũ = 98 khai báo**; chưa xác nhận biên dịch/discovery, không có test nào được thực thi trong đợt này.
+96 test mới dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; một ca dùng worker thread và latch có timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
 
-## Cách chạy trên runner độc lập
+Các test cũ đã được cập nhật ở mức source: assertion nhãn LinkSpeed, repository giả dùng API phiên đo và fixture lịch sử có timestamp cố định. Hai test `PingTesterTest` cũ vẫn có kết nối mạng thật.
 
-Chỉ chạy các lệnh sau trên bản sao project trong runner riêng, không phải máy người dùng. Cần JDK 17 và Android SDK 34.
+## Rà soát tĩnh đã thực hiện
 
-    bash ./gradlew --no-daemon :app:testDebugUnitTest --tests 'com.mobilelegend.wlo.regression.*'
-    bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+```text
+git -c core.safecrlf=false diff --check: exit 0, không có lỗi whitespace
+rg -c @Test tests/src/test/kotlin: tổng 96 khai báo
+rg -c @Test app/src/test: tổng 33 khai báo
+Không còn effect LaunchedEffect(completedScore...) thêm bản ghi
+Không còn UUID/thời gian hiện tại trong luồng lưu lịch sử của ViewModel/UI
+UUID của snapshot chỉ được tạo trong PerformBenchmarkUseCase
+Đã đối chiếu cả 4 implementation WifiRepository với withBenchmarkSession
+Không còn downloadMbps/uploadMbps/onScoreMeasured/displayDownload/displayUpload
+Không còn giờ mẫu Hôm nay, 09:42 hoặc clamp ping coerceIn(1, 999)
+```
 
-Các lệnh trên chưa được chạy. Hai test PingTesterTest cũ có socket thật; toàn bộ test hồi quy dùng dữ liệu giả.
-Khi có runner, ghi stdout/stderr, exit code, phiên bản code, JUnit XML và báo cáo lint. Không đánh dấu test chưa chạy là pass.
+Rà soát trên không chứng minh Kotlin biên dịch thành công, socket đã bind đúng trên thiết bị hoặc callback đã được unregister trên runtime.
 
-## Kiểm chứng còn thiếu
+### Rà soát tích hợp cuối BUG-07–09
 
-- UI offline, kết quả 0, timeout, dữ liệu thiếu và xem mạng B sau khi đo A.
-- Quay lại tab, lưu/xóa lịch sử, bấm đo liên tiếp, hủy và vòng đời Activity.
-- Callback hệ điều hành, đổi AP/mạng, Wi-Fi mất khi 4G vẫn bật, cleanup socket.
-- Layout trên màn hình hẹp và font lớn.
+- Đối chiếu chữ ký và lời gọi Home, Đo mạng, Radar, Thử lại, navigation và ba repository giả với API quyền/readiness mới.
+- Sửa effect định vị bản đồ để phản hồi cả thao tác bấm khi fix hợp lệ vẫn giữ nguyên tọa độ; chỉ hoàn tất yêu cầu focus khi MapView đã có.
+- Callback vị trí kiểm tra lại quyền bản đồ và dịch vụ vị trí trước khi nhận fix; dữ liệu về sau khi dịch vụ bị tắt không được coi là vị trí dùng được.
+- Rà whitespace riêng cho 24 file văn bản chưa được Git theo dõi; sau khi dọn dòng trống thừa cuối file, số lỗi còn lại: **0**. Kiểm tra này không thực thi Kotlin hoặc ứng dụng.
+- Import trùng hoàn toàn (phân biệt chữ hoa/thường): **0**. Tìm tham chiếu API quyền cũ và `NEARBY_WIFI_DEVICES` trong `app/src` và `tests/src`: không có kết quả (`rg` exit 1).
+- Tổng số khai báo vẫn là 96 test hồi quy + 33 test cũ = 129; không có test nào được chạy trong lần rà soát này.
+
+## Cách chạy trên runner riêng
+
+Các lệnh dưới đây **chưa được thực thi**. Chỉ chạy trên bản sao project trong runner/máy kiểm thử độc lập, không phải máy người dùng. Cần JDK 17, Android SDK platform 34 và khả năng tải dependency theo cấu hình Gradle hiện tại.
+
+```bash
+# Chạy riêng 36 test BUG-04–06; không có socket probe thật.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.MeasurementOwnershipTest' \
+  --tests 'com.mobilelegend.wlo.regression.NetworkSessionRegressionTest' \
+  --tests 'com.mobilelegend.wlo.regression.PingCancellationTest'
+
+# Chạy riêng 31 test BUG-07–09; không truy cập Wi-Fi/GPS thật.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.WifiReadinessTest' \
+  --tests 'com.mobilelegend.wlo.regression.WifiSnapshotCacheTest' \
+  --tests 'com.mobilelegend.wlo.regression.LocationDataPolicyTest'
+
+# Chạy toàn bộ 96 test hồi quy BUG-01–09.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.*'
+
+# Toàn bộ 129 khai báo test, bao gồm hai test socket thật cũ.
+bash ./gradlew --no-daemon :app:testDebugUnitTest
+
+# Biên dịch APK và kiểm tra Android lint.
+bash ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+```
+
+Sau khi chạy, ghi stdout/stderr, exit code, môi trường, commit/diff được kiểm thử và lưu:
+
+- JUnit XML: `app/build/test-results/testDebugUnitTest/TEST-*.xml`.
+- Test HTML: `app/build/reports/tests/testDebugUnitTest/index.html`.
+- Lint HTML: `app/build/reports/lint-results-debug.html`.
+
+Nếu dừng ở dependency/SDK/biên dịch, ghi đúng giai đoạn; không ghi test chưa chạy là pass.
+
+## Checklist UI/Android còn phải chạy trên môi trường riêng
+
+| Tình huống | Kết quả cần đạt | Trạng thái |
+| --- | --- | --- |
+| Đo A, đổi sang B/GPS khác rồi mở lại tab nhiều lần | Giữ ID/time/SSID/BSSID/tọa độ/nhu cầu/thông số A; số bản ghi không tăng | Chưa chạy |
+| Đổi tên/lưu cùng kết quả nhiều lần | Cùng một bản ghi; chỉ đổi tên/bookmark | Chưa chạy |
+| Xóa bản ghi rồi xem lại kết quả/reset/chuyển tab | Không tự khôi phục bản ghi hoặc điểm bản đồ đã xóa | Chưa chạy |
+| Đo A, xem B từ Trang chủ/Bản đồ/Đã lưu | Không trộn thông số A dưới tên B | Chưa chạy |
+| Bấm đo liên tục từ Trang chủ/tab đo/luồng radar cũ | Chỉ một phiên đang chạy; không ghi đè hoặc lưu trùng | Chưa chạy |
+| Hủy khi chờ callback / TCP đang connect | Đóng socket, gỡ callback, không lưu kết quả; đo tiếp được sau cleanup | Chưa chạy |
+| Back/chuyển tab/đưa app xuống nền khi đang đo rồi quay lại | Hủy lượt cũ; không tự chạy lại; lượt mới không bị màn cũ hủy hoặc điều hướng | Chưa chạy |
+| Tái tạo Activity sau khi đã đo; đóng hẳn Activity khi đang đo | Giữ lịch sử qua recreation; dọn job khi owner bị clear | Chưa chạy |
+| Tắt Wi-Fi khi 4G vẫn bật giữa các lần TCP connect | Thất bại/hủy; không nhận độ trễ 4G làm kết quả Wi-Fi | Chưa chạy |
+| Đổi SSID hoặc roam giữa hai AP cùng SSID; thử A→B→A | Lượt đã phát hiện thay đổi không được chấp nhận/lưu | Chưa chạy |
+| Android 26–30, 31–32, 33–34; quyền chính xác/gần đúng, tắt vị trí, ẩn BSSID | Đọc đúng mạng hoặc từ chối rõ ràng; không chấp nhận định danh thiếu | Chưa chạy |
+| Kết quả 0, timeout TCP, ping thành công chậm, LinkSpeed không biết | Giữ số liệu thật và nhãn đúng, không fallback thành dữ liệu tốt | Chưa chạy |
+| Màn hình hẹp, font lớn, SSID dài và nút hủy | Nội dung/nút không cắt hoặc đè nhau | Chưa chạy |
+| Bắt đầu qua Home/tab Đo/Radar/Thử lại với từng trạng thái quyền hoặc mạng | Cùng điều kiện và lý do; blocked không mở phiên/TCP | Chưa chạy |
+| API 30/31/33/34: chỉ Coarse, Fine, Nearby bị từ chối, tắt vị trí, quay lại Settings | Coarse chỉ đủ cho bản đồ; Wi-Fi cần Fine; Nearby không làm khóa API đọc đang dùng; callback được làm mới | Chưa chạy |
+| Di chuyển xa vị trí mặc định, bật/tắt chế độ minh họa | Quán/thư viện không đổi tọa độ; demo không vào khuyến nghị/Đã lưu | Chưa chạy |
+| Chưa có fix, fix trên 120 giây, sai số trên 100 m hoặc location mock | Không gắn tâm mặc định/fix cũ/mock vào lượt đo; gần đúng được ghi nhãn và accuracy | Chưa chạy |
+| Hai lượt đo có GPS tại A/B rồi di chuyển tới C | Hai ID/marker giữ tọa độ A/B, chỉ khoảng cách thay đổi | Chưa chạy |
+| Kéo bản đồ ra xa rồi bấm định vị khi fix hợp lệ không đổi tọa độ | Camera về đúng fix; không chờ tọa độ phải thay đổi | Chưa chạy |
+| Tắt dịch vụ vị trí khi request đang chờ; callback fix về muộn | Không nhận fix đó làm vị trí dùng được; listener/timeout được dọn | Chưa chạy |
+
+Ghi thiết bị, Android API, thao tác, network/SSID/BSSID trước và sau, số bản ghi và log quan sát được khi thực hiện từng ca. Chỉ đánh dấu Pass/Fail khi đã chạy thật.
+
+## Nguồn API đã đối chiếu
+
+- [Android NetworkCallback](https://developer.android.com/reference/android/net/ConnectivityManager.NetworkCallback): vòng đời callback, cờ thông tin vị trí từ API 31 và dữ liệu callback.
+- [Android Network.getSocketFactory](https://developer.android.com/reference/android/net/Network#getSocketFactory()): tạo socket gắn với mạng.
+- [Kotlin suspendCancellableCoroutine](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/suspend-cancellable-coroutine.html): hủy coroutine và đóng tài nguyên.
+- [Android WifiInfo.getLinkSpeed](https://developer.android.com/reference/android/net/wifi/WifiInfo#getLinkSpeed()): LinkSpeed là tốc độ liên kết Wi-Fi.
+- [Android Wi-Fi permissions](https://developer.android.com/develop/connectivity/wifi/wifi-permissions) và [WifiInfo](https://developer.android.com/reference/android/net/wifi/WifiInfo): phân biệt API cần Nearby và quyền cho các trường nhạy cảm vị trí.

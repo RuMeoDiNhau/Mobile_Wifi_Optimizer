@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
-import com.mobilelegend.wlo.presentation.components.PermissionBanner
+import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
 import com.mobilelegend.wlo.presentation.components.PulseWaveIcon
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.MISSING_METRIC
@@ -73,6 +73,7 @@ fun NetworkMeasureScreen(
     inspectedPlace: WifiPlaceItem?,
     onOpenLocationSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
     onMeasureCurrentNetwork: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -81,7 +82,8 @@ fun NetworkMeasureScreen(
 
     val isMeasuring = measureState.isBenchmarkRunning
     val content = networkMeasureContent(measureState.status, radarState, inspectedPlace)
-    val blockReason = measurementBlockReason(radarState)
+    val readiness = radarState.readiness(isMeasuring)
+    val blockReason = readiness.reason?.message
     val lastMeasureTimeText = content.measuredAtMillis?.let {
         SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date(it))
     } ?: MISSING_METRIC
@@ -109,11 +111,7 @@ fun NetworkMeasureScreen(
         Spacer(modifier = Modifier.height(18.dp))
 
         // Cảnh báo quyền vị trí nếu thiếu
-        if (!radarState.isLocationPermissionGranted) {
-            PermissionBanner("Cần cấp quyền vị trí để đọc Wi-Fi", "Cấp quyền", onOpenAppSettings)
-        } else if (!radarState.isGpsEnabled) {
-            PermissionBanner("Cần bật dịch vụ vị trí", "Bật GPS", onOpenLocationSettings)
-        }
+        MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
         Spacer(modifier = Modifier.height(12.dp))
 
         // 2. Main Dark Green Gauge Card
@@ -271,7 +269,7 @@ fun NetworkMeasureScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = onMeasureCurrentNetwork,
-                    enabled = !isMeasuring && blockReason == null,
+                    enabled = readiness.canMeasure,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SurfaceWhite,
                         contentColor = TextPrimary,

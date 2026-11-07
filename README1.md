@@ -1,5 +1,6 @@
 # Ghi chú review và hướng sửa lỗi Mobile_Wifi_Optimizer
 
+> **Cập nhật tiếp 07/11/2026 — BUG-07, BUG-08, BUG-09:** Đã bổ sung bộ điều kiện đo chung ở UI/ViewModel/use case, tách quyền bản đồ với quyền đọc SSID/BSSID, dùng callback có thông tin vị trí trên Android 12+, giữ nguyên tọa độ và ẩn dữ liệu demo theo mặc định. Snapshot vị trí có thời gian, accuracy và confidence. Thêm 31 test, tổng 96 test hồi quy + 33 test cũ = 129 khai báo. **Chưa chạy build/lint/test/runtime** vì không có runner độc lập và yêu cầu không chạy trên máy người dùng. Xem [chi tiết thay đổi, rà soát tĩnh và các ca chưa kiểm chứng](tests/README.md). Các mốc dưới đây là lịch sử review, không phải kết quả chạy test mới.
 
 > **Cập nhật 07/11/2026:** Đã thay đổi code cho BUG-01 đến BUG-06. Đợt BUG-04–06 chuyển lịch sử về ViewModel theo ID, gắn TCP với một phiên Wi-Fi có kiểm tra mất/đổi mạng, quản lý một job và hủy khi rời màn đo. Thêm 36 test, nâng bộ hồi quy trong `tests/` lên 65 test (cộng 33 test cũ là 98 khai báo). **Chưa chạy build/lint/unit test/UI test** vì phiên làm việc chỉ có môi trường trên máy người dùng, trong khi yêu cầu không chạy test ở máy này. Xem [báo cáo, giới hạn và cách chạy kiểm thử](tests/README.md). Phần bên dưới giữ nguyên nội dung review ngày 03/11/2026; chưa coi các bản sửa là đã kiểm chứng trên runtime, các BUG khác chưa được xác nhận hoàn tất.
 
@@ -299,3 +300,4 @@ RSSI có dao động tự nhiên; không yêu cầu giá trị tăng/giảm đ�
 - [Network.getSocketFactory — gắn Socket với một mạng](https://developer.android.com/reference/android/net/Network#getSocketFactory()).
 - [ViewModel Scoping APIs — phạm vi và cách lấy ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel/viewmodel-apis).
 - [Auto Backup — cú pháp domain/path](https://developer.android.com/identity/data/autobackup).
+

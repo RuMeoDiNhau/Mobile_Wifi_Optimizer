@@ -6,6 +6,7 @@ import com.mobilelegend.wlo.domain.model.LocationScore
 import com.mobilelegend.wlo.domain.model.MeasurementContext
 import com.mobilelegend.wlo.domain.model.MeasurementLocation
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
+import com.mobilelegend.wlo.domain.model.WifiAccessState
 import com.mobilelegend.wlo.domain.repository.WifiRepository
 import com.mobilelegend.wlo.domain.repository.WifiBenchmarkSession
 import com.mobilelegend.wlo.core.network.BenchmarkNetworkGuard
@@ -46,8 +47,7 @@ internal fun onlineRadar(): LiveRadarUiState {
             isConnected = true
         ),
         isWifiConnected = true,
-        isLocationPermissionGranted = true,
-        isGpsEnabled = true
+        wifiAccess = WifiAccessState(fineLocation = true, coarseLocation = true, locationServiceEnabled = true)
     )
 }
 
@@ -55,6 +55,7 @@ internal class FakeWifiRepository : WifiRepository {
     var metric = WifiMetric("Network A", "AA:BB:CC:DD:EE:01", -55, 150, 5180)
     var ping = PingResult(25, 0, true)
     var ready = true
+    var access = WifiAccessState(fineLocation = true, coarseLocation = true, locationServiceEnabled = true)
     var pingCalls = 0
     var requestedPackets = 0
     var error: Exception? = null
@@ -73,7 +74,7 @@ internal class FakeWifiRepository : WifiRepository {
     override fun getLiveWifiStream(): Flow<WifiMetric> = emptyFlow()
     override fun getCurrentWifiMetric(): WifiMetric = metric
     override fun isWifiConnected(): Boolean = metric.isConnected
-    override fun isReadyForScanning(): Boolean = ready
+    override fun getWifiAccessState(): WifiAccessState = if (ready) access else WifiAccessState()
     override suspend fun <T> withBenchmarkSession(block: suspend (WifiBenchmarkSession) -> T): T {
         openedSessions++
         activeSessions++

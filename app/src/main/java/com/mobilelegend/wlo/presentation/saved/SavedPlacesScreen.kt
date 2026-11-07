@@ -18,11 +18,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Coffee
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.WorkOutline
@@ -52,6 +52,7 @@ import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.linkSpeedText
 import com.mobilelegend.wlo.presentation.components.pingText
 import com.mobilelegend.wlo.presentation.measure_and_result.SavedSpotItem
+import com.mobilelegend.wlo.presentation.components.measuredPlacesOnly
 import com.mobilelegend.wlo.presentation.measure_and_result.SessionHistoryBottomSheetContent
 import com.mobilelegend.wlo.presentation.theme.AppBackground
 import com.mobilelegend.wlo.presentation.theme.CardBorder
@@ -76,11 +77,10 @@ fun SavedPlacesScreen(
     modifier: Modifier = Modifier
 ) {
     val savedPlaces = remember(places) {
-        val bookmarked = places.filter { it.isSaved }
-        bookmarked.ifEmpty { places.take(2) }
+        measuredPlacesOnly(places).filter { it.isSaved }
     }
 
-    val totalMeasurementsCount = 12 + sessionSpots.size
+    val totalMeasurementsCount = sessionSpots.size
     var showHistorySheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
@@ -185,6 +185,7 @@ fun SavedPlacesScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (savedPlaces.isEmpty()) Text("Chưa có địa điểm đo được lưu.", color = TextMuted)
             savedPlaces.forEachIndexed { index, place ->
                 SavedPlaceRowCard(
                     place = place,

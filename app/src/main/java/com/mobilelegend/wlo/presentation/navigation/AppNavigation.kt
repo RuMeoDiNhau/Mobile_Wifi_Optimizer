@@ -23,7 +23,12 @@ import androidx.navigation.navArgument
 import com.mobilelegend.wlo.core.permissions.PermissionHelper
 import com.mobilelegend.wlo.data.sensor.DeviceLocationProvider
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
-import com.mobilelegend.wlo.domain.model.MeasurementLocation
+import com.mobilelegend.wlo.presentation.components.placesWithDistances
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import com.mobilelegend.wlo.presentation.components.DefaultWifiPlaces
 import com.mobilelegend.wlo.presentation.components.toWifiPlace
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
@@ -49,6 +54,7 @@ fun AppNavigation(
     measureViewModel: MeasureViewModel,
     onOpenLocationSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -66,12 +72,13 @@ fun AppNavigation(
 
     val radarState by liveRadarViewModel.uiState.collectAsStateWithLifecycle()
     val measureState by measureViewModel.uiState.collectAsStateWithLifecycle()
+    val readiness = radarState.readiness(measureState.isBenchmarkRunning)
 
     // Pure projection of the ViewModel store: composition never inserts measurements.
-    val places = (measureState.savedSpots.asReversed().mapNotNull { spot ->
+    val places = placesWithDistances(measureState.savedSpots.asReversed().mapNotNull { spot ->
         spot.score.toWifiPlace()?.copy(name = spot.spotName, isSaved = spot.isSaved)
-    } + locationProvider.syncPlacesWithUserLocation(demoPlaces, userLocation)).mapIndexed { index, place -> place.copy(rank = index + 1) }
-    val areaScore = measureState.savedSpots.lastOrNull()?.score?.finalScore ?: 92
+    } + demoPlaces, userLocation).mapIndexed { index, place -> place.copy(rank = index + 1) }
+    val areaScore = measureState.savedSpots.lastOrNull()?.score?.finalScore
     val toggleSavePlace: (String) -> Unit = { placeId ->
         val measurementId = places.find { it.id == placeId }?.measurement?.measurement?.id
         if (measurementId != null) {
@@ -103,7 +110,7 @@ fun AppNavigation(
     val startCurrentNetworkMeasurement: () -> Unit = {
         inspectedPlace = null
         liveRadarViewModel.selectCategory(selectedNeed.category)
-        val locationAtStart = locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) }
+        val locationAtStart = locationProvider.getCurrentLocation().toMeasurementLocation()
         measureViewModel.startBenchmark(
             selectedNeed.category,
             locationAtStart
@@ -116,9 +123,21 @@ fun AppNavigation(
         }
     }
 
-    LaunchedEffect(radarState.isLocationPermissionGranted, radarState.isGpsEnabled) {
-        if (radarState.isLocationPermissionGranted) refreshUserLocation()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(locationProvider, lifecycleOwner, radarState.wifiAccess) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            try {
+                refreshUserLocation()
+                while (isActive) {
+                    userLocation = locationProvider.getCurrentLocation()
+                    delay(1000L)
+                }
+            } finally {
+                locationProvider.cancelLocationUpdate()
+            }
+        }
     }
+    DisposableEffect(locationProvider) { onDispose { locationProvider.cancelLocationUpdate() } }
 
     val navigateToTab: (Screen) -> Unit = { targetScreen ->
         navController.navigate(targetScreen.route) {
@@ -154,6 +173,10 @@ fun AppNavigation(
                     places = places,
                     selectedNeed = selectedNeed,
                     areaScore = areaScore,
+                    readiness = readiness,
+                    onOpenAppSettings = onOpenAppSettings,
+                    onOpenLocationSettings = onOpenLocationSettings,
+                    onOpenWifiSettings = onOpenWifiSettings,
                     onSelectNeed = { option ->
                         selectedNeed = option
                         liveRadarViewModel.selectCategory(option.category)
@@ -194,7 +217,8 @@ fun AppNavigation(
                     inspectedPlace = inspectedPlace,
                     onOpenLocationSettings = onOpenLocationSettings,
                     onOpenAppSettings = onOpenAppSettings,
-                    onMeasureCurrentNetwork = startCurrentNetworkMeasurement
+                    onMeasureCurrentNetwork = startCurrentNetworkMeasurement,
+                    onOpenWifiSettings = onOpenWifiSettings
                 )
             }
 
@@ -221,7 +245,7 @@ fun AppNavigation(
             composable(Screen.Profile.route) {
                 ProfileScreen(
                     selectedNeed = selectedNeed,
-                    totalMeasurements = 12 + measureState.savedSpots.size,
+                    totalMeasurements = measureState.savedSpots.size,
                     onCycleNeed = {
                         val allNeeds = WifiNeedOption.values()
                         val nextIndex = (selectedNeed.ordinal + 1) % allNeeds.size
@@ -239,10 +263,12 @@ fun AppNavigation(
                     viewModel = liveRadarViewModel,
                     onNavigateToBenchmark = { category ->
                         navController.navigate(Screen.MeasureBenchmark.createRoute(category.name))
-                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
+                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().toMeasurementLocation())
                     },
                     onOpenLocationSettings = onOpenLocationSettings,
-                    onOpenAppSettings = onOpenAppSettings
+                    onOpenAppSettings = onOpenAppSettings,
+                    onOpenWifiSettings = onOpenWifiSettings,
+                    readiness = readiness
                 )
             }
 
@@ -261,8 +287,12 @@ fun AppNavigation(
                     category = category,
                     viewModel = measureViewModel,
                     onStartMeasurement = {
-                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
+                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().toMeasurementLocation())
                     },
+                    readiness = readiness,
+                    onOpenAppSettings = onOpenAppSettings,
+                    onOpenLocationSettings = onOpenLocationSettings,
+                    onOpenWifiSettings = onOpenWifiSettings,
                     onBenchmarkCompleted = {
                         if (navController.currentDestination?.route == Screen.MeasureBenchmark.route) {
                             navController.navigate(Screen.Result.route) {

@@ -4,6 +4,8 @@ import com.mobilelegend.wlo.domain.model.LocationScore
 import com.mobilelegend.wlo.domain.model.MeasurementContext
 import com.mobilelegend.wlo.domain.model.MeasurementLocation
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
+import com.mobilelegend.wlo.domain.model.BenchmarkReadiness
+import com.mobilelegend.wlo.domain.model.benchmarkReadiness
 import com.mobilelegend.wlo.domain.repository.WifiRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,16 +25,21 @@ class PerformBenchmarkUseCase(
     private val currentTimeMillis: () -> Long = System::currentTimeMillis
 ) {
 
+    fun readiness(busy: Boolean = false): BenchmarkReadiness = benchmarkReadiness(
+        wifiRepository.getWifiAccessState(), wifiRepository.isWifiConnected(),
+        wifiRepository.getCurrentWifiMetric(), busy
+    )
+
     suspend operator fun invoke(
         category: UseCaseCategory,
         location: MeasurementLocation? = null
     ): LocationScore = withContext(dispatcher) {
-        check(wifiRepository.isWifiConnected()) { "Chưa kết nối Wi-Fi" }
-        check(wifiRepository.isReadyForScanning()) { "Cần cấp quyền vị trí và bật dịch vụ vị trí" }
+        readiness().requireReady()
         wifiRepository.withBenchmarkSession { session ->
             currentCoroutineContext().ensureActive()
             session.ensureValid()
             val currentMetric = session.initialMetric
+            benchmarkReadiness(wifiRepository.getWifiAccessState(), true, currentMetric).requireReady()
             val pingResult = session.measurePing(packetsCount = 3)
             currentCoroutineContext().ensureActive()
             session.ensureValid()
@@ -49,6 +56,7 @@ class PerformBenchmarkUseCase(
             )
             currentCoroutineContext().ensureActive()
             session.ensureValid()
+            benchmarkReadiness(wifiRepository.getWifiAccessState(), true, currentMetric).requireReady()
             result
         }
     }

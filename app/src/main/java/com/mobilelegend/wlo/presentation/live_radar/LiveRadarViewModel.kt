@@ -33,7 +33,7 @@ class LiveRadarViewModel(
     /**
      * Khởi động luồng Flow lắng nghe tín hiệu sóng từ WifiScanner mỗi 1 giây.
      */
-    fun startLiveRadarStream() {
+    private fun startLiveRadarStream() {
         viewModelScope.launch {
             streamLiveWifiUseCase()
                 .catch {
@@ -43,7 +43,8 @@ class LiveRadarViewModel(
                     _uiState.update { currentState ->
                         currentState.copy(
                             radarData = data,
-                            isWifiConnected = data.isConnected
+                            isWifiConnected = data.isConnected,
+                            wifiAccess = permissionHelper.wifiAccessState()
                         )
                     }
                 }
@@ -54,15 +55,15 @@ class LiveRadarViewModel(
      * Cập nhật lại trạng thái quyền và GPS khi người dùng quay lại từ Settings.
      */
     fun refreshHardwareStatus() {
-        val hasPermission = permissionHelper.hasLocationPermission() && permissionHelper.hasNearbyWifiPermission()
-        val isGps = permissionHelper.isLocationServiceEnabled()
+        wifiRepository.refreshWifiObservation()
+        val access = permissionHelper.wifiAccessState()
         val isWifi = wifiRepository.isWifiConnected()
 
         _uiState.update {
             it.copy(
-                isLocationPermissionGranted = hasPermission,
-                isGpsEnabled = isGps,
-                isWifiConnected = isWifi
+                wifiAccess = access,
+                isWifiConnected = isWifi,
+                radarData = streamLiveWifiUseCase.mapToLiveRadarData(wifiRepository.getCurrentWifiMetric())
             )
         }
     }

@@ -2,7 +2,6 @@ package com.mobilelegend.wlo
 
 import android.Manifest
 import android.os.Bundle
-import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -82,6 +81,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onOpenAppSettings = {
                             startActivity(permissionHelper.createAppSettingsIntent())
+                        },
+                        onOpenWifiSettings = {
+                            startActivity(permissionHelper.createWifiSettingsIntent())
                         }
                     )
                 }
@@ -105,10 +107,6 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-        }
 
         permissionLauncher.launch(permissions.toTypedArray())
     }

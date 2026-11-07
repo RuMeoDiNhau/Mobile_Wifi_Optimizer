@@ -1,16 +1,27 @@
 package com.mobilelegend.wlo.presentation.components
 
 import com.mobilelegend.wlo.domain.model.LocationScore
+import com.mobilelegend.wlo.domain.model.LocationConfidence
+import com.mobilelegend.wlo.domain.model.validCoordinates
 
 /** Do not invent a map location or use the SSID/GPS from the time the result is viewed. */
 fun LocationScore.toWifiPlace(): WifiPlaceItem? {
     val context = measurement ?: return null
     val location = context.location ?: return null
+    if (!validCoordinates(location.latitude, location.longitude) || location.confidence in setOf(
+            LocationConfidence.STALE, LocationConfidence.MOCK, LocationConfidence.UNAVAILABLE
+        )) return null
+    val accuracyText = location.accuracyMeters?.takeIf { it.isFinite() && it > 0 }
+        ?.let { "sai số khoảng ${it.toInt()} m" } ?: "chưa rõ sai số"
     return WifiPlaceItem(
         id = "measured_${context.id}",
         rank = 1,
         name = networkName(context.ssid),
-        district = "Vị trí tại lúc đo",
+        district = when (location.confidence) {
+            LocationConfidence.APPROXIMATE -> "Vị trí gần đúng · $accuracyText"
+            LocationConfidence.RECENT -> "Vị trí tại lúc đo · $accuracyText"
+            else -> "Vị trí chưa có thông tin độ chính xác"
+        },
         distanceText = MISSING_METRIC,
         score = finalScore,
         qualityLabel = when {

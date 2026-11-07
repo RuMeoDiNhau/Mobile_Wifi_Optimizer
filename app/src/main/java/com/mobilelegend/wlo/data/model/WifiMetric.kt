@@ -9,5 +9,6 @@ data class WifiMetric(
     val rssi: Int,              // Cường độ tín hiệu dBm (VD: -55)
     val linkSpeedMbps: Int,     // Tốc độ liên kết đường truyền Mbps (VD: 144)
     val frequencyMhz: Int,      // Tần số sóng MHz (VD: 2412 cho 2.4GHz, 5180 cho 5GHz)
-    val isConnected: Boolean = true // Trạng thái đang kết nối Wi-Fi hay không
+    val isConnected: Boolean = true, // Trạng thái đang kết nối Wi-Fi hay không
+    val isSampleAvailable: Boolean = true
 )

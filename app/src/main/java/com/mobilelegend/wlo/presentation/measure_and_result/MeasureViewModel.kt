@@ -32,6 +32,11 @@ class MeasureViewModel(
     fun startBenchmark(category: UseCaseCategory, location: MeasurementLocation? = null): Boolean =
         synchronized(lock) {
             if (benchmarkJob != null) return@synchronized false
+            val readiness = performBenchmarkUseCase.readiness()
+            if (!readiness.canMeasure) {
+                _uiState.update { it.copy(status = MeasureStatus.Failed(requireNotNull(readiness.reason).message)) }
+                return@synchronized false
+            }
             val runId = ++generation
             // Assign ownership before execution, including with an immediate Main dispatcher.
             val job = viewModelScope.launch(start = CoroutineStart.LAZY) {

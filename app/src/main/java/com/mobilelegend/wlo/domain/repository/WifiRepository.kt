@@ -1,6 +1,7 @@
 package com.mobilelegend.wlo.domain.repository
 
 import com.mobilelegend.wlo.data.model.WifiMetric
+import com.mobilelegend.wlo.domain.model.WifiAccessState
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,6 +32,8 @@ interface WifiRepository {
     /**
      * Kiểm tra quyền và dịch vụ GPS đã sẵn sàng hay chưa.
      */
-    fun isReadyForScanning(): Boolean
+    fun getWifiAccessState(): WifiAccessState
 
+    /** Re-register location-bearing observations after returning to the foreground/settings. */
+    fun refreshWifiObservation() {}
 }

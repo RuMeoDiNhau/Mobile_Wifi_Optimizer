@@ -58,6 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mobilelegend.wlo.data.sensor.UserGeoCoordinate
+import com.mobilelegend.wlo.data.sensor.DEFAULT_MAP_LAT
+import com.mobilelegend.wlo.data.sensor.DEFAULT_MAP_LON
+import com.mobilelegend.wlo.presentation.components.visibleMapPlaces
+import kotlinx.coroutines.delay
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
@@ -99,6 +103,8 @@ fun WifiMapScreen(
     var selectedFilter by remember { mutableStateOf(MapFilterChip.ALL) }
     var selectedPlaceId by remember { mutableStateOf(places.firstOrNull()?.id ?: "workshop_coffee") }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+    var showDemo by remember { mutableStateOf(false) }
+    var pendingLocationFocus by remember { mutableStateOf(false) }
 
     // Khởi tạo cấu hình User-Agent cho OSMdroid
     LaunchedEffect(Unit) {
@@ -106,8 +112,8 @@ fun WifiMapScreen(
         onRefreshUserLocation()
     }
 
-    val filteredPlaces = remember(places, searchQuery, selectedFilter) {
-        places.filter { place ->
+    val filteredPlaces = remember(places, searchQuery, selectedFilter, showDemo) {
+        visibleMapPlaces(places, showDemo).filter { place ->
             val matchesQuery = searchQuery.isBlank() ||
                 place.name.contains(searchQuery, ignoreCase = true) ||
                 place.district.contains(searchQuery, ignoreCase = true)
@@ -123,15 +129,20 @@ fun WifiMapScreen(
 
     val selectedPlace = filteredPlaces.find { it.id == selectedPlaceId }
         ?: filteredPlaces.firstOrNull()
-        ?: places.first()
 
     // Tự động bay camera khi đổi địa điểm được chọn
-    LaunchedEffect(selectedPlace.id) {
-        mapViewRef?.controller?.animateTo(
-            GeoPoint(selectedPlace.latitude, selectedPlace.longitude),
-            16.6,
-            550L
-        )
+    LaunchedEffect(selectedPlace?.id) {
+        selectedPlace?.let { mapViewRef?.controller?.animateTo(GeoPoint(it.latitude, it.longitude), 16.6, 550L) }
+    }
+    LaunchedEffect(pendingLocationFocus, userLocation, mapViewRef) {
+        val mapView = mapViewRef
+        if (pendingLocationFocus && userLocation.isRealFix && mapView != null) {
+            mapView.controller.animateTo(GeoPoint(userLocation.latitude, userLocation.longitude), 16.8, 650L)
+            pendingLocationFocus = false
+        }
+    }
+    LaunchedEffect(pendingLocationFocus) {
+        if (pendingLocationFocus) { delay(10_500L); pendingLocationFocus = false }
     }
 
     DisposableEffect(Unit) {
@@ -152,6 +163,12 @@ fun WifiMapScreen(
         AppTopHeader(
             overline = "KHÁM PHÁ XUNG QUANH",
             title = "Bản đồ Wi-Fi"
+        )
+        Text(userLocation.statusText, fontSize = 12.sp, color = TextSecondary)
+        Text(
+            if (showDemo) "Đang xem dữ liệu minh họa · Ẩn" else "Hiện dữ liệu minh họa",
+            modifier = Modifier.clickable { showDemo = !showDemo }.padding(vertical = 6.dp),
+            color = PrimaryGreen, fontSize = 12.sp
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -275,7 +292,8 @@ fun WifiMapScreen(
                         overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(softMintMatrix))
 
                         controller.setZoom(16.5)
-                        controller.setCenter(GeoPoint(userLocation.latitude, userLocation.longitude))
+                        controller.setCenter(if (userLocation.isRealFix) GeoPoint(userLocation.latitude, userLocation.longitude)
+                            else GeoPoint(DEFAULT_MAP_LAT, DEFAULT_MAP_LON))
                         onResume()
                         mapViewRef = this
                     }
@@ -284,23 +302,26 @@ fun WifiMapScreen(
                     mapView.overlays.clear()
 
                     // 1. Marker chấm xanh định vị GPS thật của người dùng
-                    val userMarker = Marker(mapView).apply {
-                        position = GeoPoint(userLocation.latitude, userLocation.longitude)
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        icon = createUserGpsDotDrawable(context)
-                        title = "Vị trí của bạn"
-                        setOnMarkerClickListener { _, _ ->
-                            mapView.controller.animateTo(position, 17.0, 500L)
-                            true
+                    if (userLocation.isRealFix) {
+                        val userMarker = Marker(mapView).apply {
+                            position = GeoPoint(userLocation.latitude, userLocation.longitude)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            icon = createUserGpsDotDrawable(context)
+                            title = userLocation.statusText
+                            setOnMarkerClickListener { _, _ ->
+                                mapView.controller.animateTo(position, 17.0, 500L)
+                                true
+                            }
                         }
+                        mapView.overlays.add(userMarker)
                     }
-                    mapView.overlays.add(userMarker)
 
                     // 2. Các ghim điểm số Wi-Fi (vẽ ghim đang chọn sau cùng để nổi lên trên cùng)
-                    val sortedForRender = filteredPlaces.sortedBy { it.id == selectedPlace.id }
+                    val sortedForRender = filteredPlaces.sortedBy { it.id == selectedPlace?.id }
                     sortedForRender.forEach { place ->
-                        val isSelectedPin = place.id == selectedPlace.id
+                        val isSelectedPin = place.id == selectedPlace?.id
                         val pinHexColor = when {
+                            place.isDemo -> AndroidColor.GRAY
                             place.score >= 92 -> AndroidColor.parseColor("#0E6C50")
                             place.score >= 85 && place.score != 89 -> AndroidColor.parseColor("#499377")
                             else -> AndroidColor.parseColor("#DF9A3B")
@@ -315,7 +336,7 @@ fun WifiMapScreen(
                                 fillColor = pinHexColor,
                                 isSelected = isSelectedPin
                             )
-                            title = place.name
+                            title = if (place.isDemo) "Minh họa: ${place.name}" else place.name
                             setOnMarkerClickListener { _, _ ->
                                 selectedPlaceId = place.id
                                 mapView.controller.animateTo(position, 16.8, 500L)
@@ -383,12 +404,8 @@ fun WifiMapScreen(
                     .padding(14.dp)
                     .size(42.dp)
                     .clickable {
+                        pendingLocationFocus = true
                         onRefreshUserLocation()
-                        mapViewRef?.controller?.animateTo(
-                            GeoPoint(userLocation.latitude, userLocation.longitude),
-                            16.8,
-                            650L
-                        )
                     },
                 shape = RoundedCornerShape(14.dp),
                 color = SurfaceWhite,
@@ -405,7 +422,12 @@ fun WifiMapScreen(
             }
 
             // Thẻ thông tin địa điểm nổi dưới đáy bản đồ
-            Surface(
+            if (selectedPlace == null) Text(
+                "Chưa có điểm đo phù hợp. Đo Wi-Fi tại vị trí của bạn hoặc bật dữ liệu minh họa.",
+                modifier = Modifier.align(Alignment.BottomCenter).background(SurfaceWhite).padding(16.dp),
+                color = TextSecondary, fontSize = 13.sp
+            )
+            if (selectedPlace != null) Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
@@ -433,7 +455,7 @@ fun WifiMapScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${selectedPlace.score} · ${selectedPlace.qualityLabel}",
+                                text = if (selectedPlace.isDemo) "DỮ LIỆU MINH HỌA" else "${selectedPlace.score} · ${selectedPlace.qualityLabel}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = PrimaryGreen
@@ -454,6 +476,10 @@ fun WifiMapScreen(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
+                    )
+                    Text(
+                        if (selectedPlace.isDemo) "Không dùng để khuyến nghị kết nối thực tế" else selectedPlace.district,
+                        fontSize = 12.sp, color = TextMuted
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))

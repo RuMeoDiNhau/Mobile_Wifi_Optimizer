@@ -11,11 +11,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Android 13+ Nearby Wi-Fi Devices -->
-    <uses-permission
-        android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="tiramisu" />
+    <!-- Reading SSID/BSSID and placing measurements on a map uses location permission.
+         No Nearby Wi-Fi connection-management APIs are used. -->
 
     <application
         android:allowBackup="true"

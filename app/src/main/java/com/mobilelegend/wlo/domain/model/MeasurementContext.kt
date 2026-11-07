@@ -10,4 +10,15 @@ data class MeasurementContext(
     val networkId: String? = null
 )
 
-data class MeasurementLocation(val latitude: Double, val longitude: Double)
+enum class LocationConfidence { RECENT, APPROXIMATE, STALE, MOCK, UNAVAILABLE, UNKNOWN }
+
+fun validCoordinates(latitude: Double, longitude: Double): Boolean =
+    latitude.isFinite() && longitude.isFinite() && latitude in -90.0..90.0 && longitude in -180.0..180.0
+
+data class MeasurementLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val capturedAtMillis: Long? = null,
+    val accuracyMeters: Float? = null,
+    val confidence: LocationConfidence = LocationConfidence.UNKNOWN
+)

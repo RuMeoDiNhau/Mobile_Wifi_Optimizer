@@ -43,7 +43,8 @@ class StreamLiveWifiUseCase(
             qualityLevel = qualityLevel,
             linkSpeedMbps = metric.linkSpeedMbps,
             frequencyMhz = metric.frequencyMhz,
-            isConnected = metric.isConnected
+            isConnected = metric.isConnected,
+            isSampleAvailable = metric.isSampleAvailable
         )
     }
 }

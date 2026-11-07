@@ -20,5 +20,6 @@ data class LiveRadarData(
     val qualityLevel: SignalQualityLevel,
     val linkSpeedMbps: Int,
     val frequencyMhz: Int,
-    val isConnected: Boolean
+    val isConnected: Boolean,
+    val isSampleAvailable: Boolean = true
 )

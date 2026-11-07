@@ -38,9 +38,9 @@ class NetworkMeasureContentTest {
 
     @Test
     fun missing_permission_and_gps_have_distinct_explanations() {
-        val noPermission = onlineRadar().copy(isLocationPermissionGranted = false)
-        val noGps = onlineRadar().copy(isGpsEnabled = false)
-        assertEquals("Cần cấp quyền vị trí để đọc Wi-Fi", measurementBlockReason(noPermission))
+        val noPermission = onlineRadar().let { it.copy(wifiAccess = it.wifiAccess.copy(fineLocation = false, coarseLocation = false)) }
+        val noGps = onlineRadar().let { it.copy(wifiAccess = it.wifiAccess.copy(locationServiceEnabled = false)) }
+        assertEquals("Cần cấp quyền vị trí chính xác để đọc Wi-Fi", measurementBlockReason(noPermission))
         assertEquals("Cần bật dịch vụ vị trí", measurementBlockReason(noGps))
         for (radar in listOf(noPermission, noGps)) {
             val content = networkMeasureContent(MeasureStatus.Idle, radar, null)

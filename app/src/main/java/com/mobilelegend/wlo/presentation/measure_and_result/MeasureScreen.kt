@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
+import com.mobilelegend.wlo.domain.model.BenchmarkReadiness
+import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
 import com.mobilelegend.wlo.presentation.theme.DarkBackground
 import com.mobilelegend.wlo.presentation.theme.PrimaryBlue
 import com.mobilelegend.wlo.presentation.theme.PrimaryBlueVariant
@@ -60,6 +62,10 @@ fun MeasureScreen(
     onBenchmarkCompleted: () -> Unit,
     onBackToRadar: () -> Unit,
     onStartMeasurement: () -> Unit,
+    readiness: BenchmarkReadiness,
+    onOpenAppSettings: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -89,6 +95,7 @@ fun MeasureScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
         when (val status = uiState.status) {
             is MeasureStatus.Measuring -> {
                 // Pulse Animation Box
@@ -191,7 +198,7 @@ fun MeasureScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = onStartMeasurement,
-                    enabled = !uiState.isBenchmarkRunning,
+                    enabled = readiness.canMeasure,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlueVariant),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -204,7 +211,7 @@ fun MeasureScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onStartMeasurement,
-                    enabled = !uiState.isBenchmarkRunning
+                    enabled = readiness.canMeasure
                 ) {
                     Text(if (uiState.isBenchmarkRunning) "Đang dọn kết nối..." else "Đo lại")
                 }

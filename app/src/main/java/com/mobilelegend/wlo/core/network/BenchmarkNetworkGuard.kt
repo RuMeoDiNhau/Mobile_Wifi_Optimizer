@@ -1,6 +1,7 @@
 package com.mobilelegend.wlo.core.network
 
 import com.mobilelegend.wlo.data.model.WifiMetric
+import com.mobilelegend.wlo.domain.model.hasReadableWifiIdentity
 
 class WifiNetworkChangedException(message: String) : IllegalStateException(message)
 
@@ -40,8 +41,3 @@ class BenchmarkNetworkGuard(
     fun ensureValid() { failure?.let { throw it } }
 
 }
-
-private fun hasReadableWifiIdentity(metric: WifiMetric): Boolean =
-    metric.ssid.isNotBlank() && metric.ssid !in setOf("<unknown ssid>", "Mạng không xác định", "Mạng Wi-Fi (Cần bật GPS)") &&
-        metric.bssid.matches(Regex("(?i)([0-9a-f]{2}:){5}[0-9a-f]{2}")) &&
-        metric.bssid !in setOf("00:00:00:00:00:00", "02:00:00:00:00:00")

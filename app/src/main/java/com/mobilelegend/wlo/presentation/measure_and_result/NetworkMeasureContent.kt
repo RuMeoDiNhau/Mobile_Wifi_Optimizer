@@ -26,13 +26,7 @@ data class NetworkMeasureContent(
     val progress: Float = 0f
 )
 
-fun measurementBlockReason(radar: LiveRadarUiState): String? = when {
-    !radar.isWifiConnected -> "Chưa kết nối Wi-Fi"
-    !radar.isLocationPermissionGranted -> "Cần cấp quyền vị trí để đọc Wi-Fi"
-    !radar.isGpsEnabled -> "Cần bật dịch vụ vị trí"
-    !radar.radarData.isConnected -> "Đang chờ thông tin Wi-Fi"
-    else -> null
-}
+fun measurementBlockReason(radar: LiveRadarUiState): String? = radar.readiness().reason?.message
 
 fun networkMeasureContent(
     status: MeasureStatus,

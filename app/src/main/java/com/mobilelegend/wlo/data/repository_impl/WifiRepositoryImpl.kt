@@ -44,6 +44,6 @@ class WifiRepositoryImpl(
         return wifiScanner.isConnectedToWifi()
     }
 
-    override fun isReadyForScanning() = permissionHelper.isReadyForWifiScanning()
-
+    override fun getWifiAccessState() = permissionHelper.wifiAccessState()
+    override fun refreshWifiObservation() = wifiScanner.refresh()
 }

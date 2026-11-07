@@ -43,7 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
-import com.mobilelegend.wlo.presentation.components.PermissionBanner
+import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
+import com.mobilelegend.wlo.domain.model.BenchmarkReadiness
 import com.mobilelegend.wlo.presentation.components.SignalGaugeIndicator
 import com.mobilelegend.wlo.presentation.theme.CardBorder
 import com.mobilelegend.wlo.presentation.theme.DarkBackground
@@ -64,6 +65,8 @@ fun LiveRadarScreen(
     onNavigateToBenchmark: (UseCaseCategory) -> Unit,
     onOpenLocationSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
+    readiness: BenchmarkReadiness,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -112,21 +115,8 @@ fun LiveRadarScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // 2. Permission / GPS Warnings
-        if (!uiState.isLocationPermissionGranted) {
-            PermissionBanner(
-                message = "Ứng dụng cần quyền Vị trí để đo được cường độ dBm và tên Wi-Fi.",
-                buttonText = "Cấp quyền",
-                onActionClick = onOpenAppSettings
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        } else if (!uiState.isGpsEnabled) {
-            PermissionBanner(
-                message = "Dịch vụ GPS đang tắt. Android sẽ ẩn tên sóng nếu không bật GPS.",
-                buttonText = "Bật GPS",
-                onActionClick = onOpenLocationSettings
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
+        MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
+        Spacer(modifier = Modifier.height(12.dp))
 
         // 3. Wi-Fi Status Card
         Card(
@@ -277,7 +267,7 @@ fun LiveRadarScreen(
         // 7. Benchmark Button (CTA)
         Button(
             onClick = { onNavigateToBenchmark(uiState.selectedCategory) },
-            enabled = uiState.isWifiConnected,
+            enabled = readiness.canMeasure,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),

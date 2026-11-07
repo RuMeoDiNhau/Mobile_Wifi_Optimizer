@@ -3,6 +3,7 @@ package com.mobilelegend.wlo.domain.usecase
 import com.mobilelegend.wlo.data.model.PingResult
 import com.mobilelegend.wlo.data.model.WifiMetric
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
+import com.mobilelegend.wlo.domain.model.WifiAccessState
 import com.mobilelegend.wlo.domain.repository.WifiRepository
 import com.mobilelegend.wlo.domain.repository.WifiBenchmarkSession
 import kotlinx.coroutines.flow.Flow
@@ -52,7 +53,7 @@ class PerformBenchmarkUseCaseTest {
             })
         }
         override fun isWifiConnected(): Boolean = metric.isConnected
-        override fun isReadyForScanning(): Boolean = true
+        override fun getWifiAccessState() = WifiAccessState(fineLocation = true, locationServiceEnabled = true)
     }
 
     private lateinit var mockRepo: MockWifiRepository

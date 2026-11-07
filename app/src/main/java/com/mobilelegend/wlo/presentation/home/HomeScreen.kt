@@ -82,17 +82,24 @@ import com.mobilelegend.wlo.presentation.theme.TextSecondary
 import com.mobilelegend.wlo.presentation.theme.ThumbnailBlue
 import com.mobilelegend.wlo.presentation.theme.ThumbnailLavender
 import com.mobilelegend.wlo.presentation.theme.ThumbnailMint
+import com.mobilelegend.wlo.domain.model.BenchmarkReadiness
+import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
+import com.mobilelegend.wlo.presentation.components.measuredPlacesOnly
 
 @Composable
 fun HomeScreen(
     places: List<WifiPlaceItem>,
     selectedNeed: WifiNeedOption,
-    areaScore: Int,
+    areaScore: Int?,
     onSelectNeed: (WifiNeedOption) -> Unit,
     onToggleSavePlace: (String) -> Unit,
     onOpenMap: () -> Unit,
     onStartMeasureHere: () -> Unit,
     onPlaceClick: (WifiPlaceItem) -> Unit,
+    readiness: BenchmarkReadiness,
+    onOpenAppSettings: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
+    onOpenWifiSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -100,9 +107,9 @@ fun HomeScreen(
 
     val filteredPlaces = remember(places, searchQuery, showAllPlaces) {
         val list = if (searchQuery.isBlank()) {
-            places
+            measuredPlacesOnly(places)
         } else {
-            places.filter {
+            measuredPlacesOnly(places).filter {
                 it.name.contains(searchQuery, ignoreCase = true) ||
                     it.district.contains(searchQuery, ignoreCase = true)
             }
@@ -129,6 +136,7 @@ fun HomeScreen(
             )
 
             Spacer(modifier = Modifier.height(18.dp))
+            MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
 
             // 2. Search Bar
             Row(
@@ -242,14 +250,14 @@ fun HomeScreen(
             ) {
                 Column {
                     Text(
-                        text = "Phù hợp nhất gần bạn",
+                        text = "Địa điểm đã đo trong phiên",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Xếp hạng theo dữ liệu thực tế",
+                        text = "Không bao gồm dữ liệu minh họa",
                         fontSize = 13.sp,
                         color = TextMuted
                     )
@@ -272,6 +280,7 @@ fun HomeScreen(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (filteredPlaces.isEmpty()) Text("Chưa có địa điểm đã đo phù hợp.", color = TextMuted)
                 filteredPlaces.forEachIndexed { index, place ->
                     RankedPlaceCard(
                         place = place,
@@ -288,7 +297,7 @@ fun HomeScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 16.dp)
-                .clickable { onStartMeasureHere() },
+                .clickable(enabled = readiness.canMeasure) { onStartMeasureHere() },
             shape = RoundedCornerShape(50),
             color = DarkFabBackground,
             shadowElevation = 10.dp
@@ -312,7 +321,7 @@ fun HomeScreen(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Đo Wi-Fi tại đây",
+                    text = if (readiness.canMeasure) "Đo Wi-Fi tại đây" else "Chưa thể đo Wi-Fi",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -324,7 +333,7 @@ fun HomeScreen(
 
 @Composable
 private fun HeroQualityCard(
-    score: Int,
+    score: Int?,
     onOpenMap: () -> Unit
 ) {
     Box(
@@ -404,7 +413,7 @@ private fun HeroQualityCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "8 điểm tốt quanh bạn",
+                    text = "Kết quả trong phiên",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
@@ -419,7 +428,7 @@ private fun HeroQualityCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Khu vực này đang có\nkết nối rất tốt",
+                        text = "Đo chất lượng Wi-Fi\ntại vị trí của bạn",
                         fontSize = 21.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
@@ -427,7 +436,7 @@ private fun HeroQualityCard(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Dữ liệu từ 124 lượt đo trong 24 giờ qua",
+                        text = "Điểm của lượt đo gần nhất trong phiên",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.72f)
                     )
@@ -453,7 +462,7 @@ private fun HeroQualityCard(
                         )
                         Row(verticalAlignment = Alignment.Bottom) {
                             Text(
-                                text = "$score",
+                                text = score?.toString() ?: "—",
                                 fontSize = 26.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
