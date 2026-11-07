@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
+import com.mobilelegend.wlo.presentation.components.RadarObservationNotice
 import com.mobilelegend.wlo.presentation.components.PulseWaveIcon
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.MISSING_METRIC
@@ -112,6 +113,7 @@ fun NetworkMeasureScreen(
 
         // Cảnh báo quyền vị trí nếu thiếu
         MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
+        RadarObservationNotice(radarState, liveRadarViewModel::refreshHardwareStatus)
         Spacer(modifier = Modifier.height(12.dp))
 
         // 2. Main Dark Green Gauge Card

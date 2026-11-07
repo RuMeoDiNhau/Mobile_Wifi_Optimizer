@@ -94,9 +94,10 @@ class WifiScanner(context: Context) {
                         try {
                             cm.registerDefaultNetworkCallback(callback)
                             registered = callback
-                        } catch (_: SecurityException) {
-                            // The next permission transition retries registration; no stale identity.
+                        } catch (denied: SecurityException) {
                             snapshots.reset()
+                            // Surface denial so Radar can stop retries and explain recovery.
+                            throw denied
                         }
                     }
                 }

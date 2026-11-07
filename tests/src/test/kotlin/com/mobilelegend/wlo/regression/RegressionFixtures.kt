@@ -44,7 +44,8 @@ internal fun onlineRadar(): LiveRadarUiState {
             bssid = "AA:BB:CC:DD:EE:03",
             signalPercentage = 100,
             linkSpeedMbps = 866,
-            isConnected = true
+            isConnected = true,
+            isSampleAvailable = true
         ),
         isWifiConnected = true,
         wifiAccess = WifiAccessState(fineLocation = true, coarseLocation = true, locationServiceEnabled = true)

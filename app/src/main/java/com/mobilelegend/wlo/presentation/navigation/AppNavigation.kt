@@ -30,6 +30,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import com.mobilelegend.wlo.presentation.components.DefaultWifiPlaces
+import com.mobilelegend.wlo.presentation.components.RadarObservationNotice
 import com.mobilelegend.wlo.presentation.components.toWifiPlace
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
@@ -173,6 +174,7 @@ fun AppNavigation(
                     places = places,
                     selectedNeed = selectedNeed,
                     areaScore = areaScore,
+                    radarNotice = { RadarObservationNotice(radarState, liveRadarViewModel::refreshHardwareStatus) },
                     readiness = readiness,
                     onOpenAppSettings = onOpenAppSettings,
                     onOpenLocationSettings = onOpenLocationSettings,
@@ -284,6 +286,7 @@ fun AppNavigation(
                 }
 
                 MeasureScreen(
+                    radarNotice = { RadarObservationNotice(radarState, liveRadarViewModel::refreshHardwareStatus) },
                     category = category,
                     viewModel = measureViewModel,
                     onStartMeasurement = {

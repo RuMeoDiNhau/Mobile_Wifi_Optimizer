@@ -100,6 +100,7 @@ fun HomeScreen(
     onOpenAppSettings: () -> Unit,
     onOpenLocationSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
+    radarNotice: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -137,6 +138,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
             MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
+            radarNotice()
 
             // 2. Search Bar
             Row(

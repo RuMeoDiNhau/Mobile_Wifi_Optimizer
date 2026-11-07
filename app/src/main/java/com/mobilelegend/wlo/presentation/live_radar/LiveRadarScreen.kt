@@ -31,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
+import com.mobilelegend.wlo.presentation.components.RadarObservationNotice
+import com.mobilelegend.wlo.presentation.components.MISSING_METRIC
 import com.mobilelegend.wlo.domain.model.BenchmarkReadiness
 import com.mobilelegend.wlo.presentation.components.SignalGaugeIndicator
 import com.mobilelegend.wlo.presentation.theme.CardBorder
@@ -71,9 +72,7 @@ fun LiveRadarScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        viewModel.refreshHardwareStatus()
-    }
+    val hasSample = uiState.radarData.isConnected && uiState.radarData.isSampleAvailable
 
     Column(
         modifier = modifier
@@ -108,7 +107,7 @@ fun LiveRadarScreen(
                 modifier = Modifier
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(if (uiState.isWifiConnected) SignalGreen else SignalRed)
+                    .background(if (hasSample) SignalGreen else SignalRed)
             )
         }
 
@@ -116,6 +115,7 @@ fun LiveRadarScreen(
 
         // 2. Permission / GPS Warnings
         MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
+        RadarObservationNotice(uiState, viewModel::refreshHardwareStatus)
         Spacer(modifier = Modifier.height(12.dp))
 
         // 3. Wi-Fi Status Card
@@ -148,13 +148,13 @@ fun LiveRadarScreen(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = uiState.radarData.ssid,
+                        text = if (hasSample) uiState.radarData.ssid else MISSING_METRIC,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                     Text(
-                        text = if (uiState.isWifiConnected) "BSSID: ${uiState.radarData.bssid}" else "Vui lòng kết nối Wi-Fi để bắt đầu",
+                        text = if (hasSample) "BSSID: ${uiState.radarData.bssid}" else "Chưa có mẫu Wi-Fi hiện tại",
                         fontSize = 12.sp,
                         color = TextMuted
                     )
@@ -165,12 +165,18 @@ fun LiveRadarScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         // 4. Đồng hồ Live Gauge
-        SignalGaugeIndicator(
-            rssi = uiState.radarData.rssi,
-            percentage = uiState.radarData.signalPercentage,
-            qualityLevel = uiState.radarData.qualityLevel,
-            size = 230.dp
-        )
+        if (hasSample && uiState.radarData.rssi in -126..-1) {
+            SignalGaugeIndicator(
+                rssi = uiState.radarData.rssi,
+                percentage = uiState.radarData.signalPercentage,
+                qualityLevel = uiState.radarData.qualityLevel,
+                size = 230.dp
+            )
+        } else {
+            Box(Modifier.size(230.dp), contentAlignment = Alignment.Center) {
+                Text(MISSING_METRIC, fontSize = 48.sp, color = TextMuted)
+            }
+        }
 
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -185,9 +191,9 @@ fun LiveRadarScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(text = "Tốc độ lý thuyết", fontSize = 11.sp, color = TextMuted)
+                    Text(text = "Tốc độ liên kết Wi-Fi", fontSize = 11.sp, color = TextMuted)
                     Text(
-                        text = "${uiState.radarData.linkSpeedMbps} Mbps",
+                        text = if (hasSample && uiState.radarData.linkSpeedMbps > 0) "${uiState.radarData.linkSpeedMbps} Mbps" else MISSING_METRIC,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = SecondaryTeal
@@ -201,9 +207,9 @@ fun LiveRadarScreen(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text(text = "Băng tần sóng", fontSize = 11.sp, color = TextMuted)
+                    Text(text = "Tần số", fontSize = 11.sp, color = TextMuted)
                     Text(
-                        text = if (uiState.radarData.frequencyMhz > 4900) "5.0 GHz" else "2.4 GHz",
+                        text = if (hasSample && uiState.radarData.frequencyMhz > 0) "${uiState.radarData.frequencyMhz} MHz" else MISSING_METRIC,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = PrimaryBlue

@@ -1,4 +1,4 @@
-# Kiểm thử BUG-01 đến BUG-09
+# Kiểm thử BUG-01 đến BUG-11
 
 Ngày ghi nhận: **07/11/2026** (Asia/Saigon).
 
@@ -15,11 +15,52 @@ Không có kết quả `BUILD SUCCESSFUL`, JUnit XML hoặc ảnh chạy ứng d
 | BUG-01–03 | Giữ lại thay đổi và 29 test từ lượt trước |
 | BUG-04–06 | Thêm 36 test trong 3 file; cập nhật các repository giả theo API phiên đo |
 | BUG-07–09 | Thêm 31 test trong 3 file; cập nhật fixture quyền/readiness và dữ liệu vị trí |
-| Toàn bộ test hồi quy trong `tests/` | **96 phương thức `@Test`, 0 đã thực thi** |
+| BUG-10–11 | Thêm 30 test trong `LiveRadarLifecycleTest.kt`; cập nhật fixture mẫu Wi-Fi |
+| Toàn bộ test hồi quy trong `tests/` | **126 phương thức `@Test`, 0 đã thực thi** |
 | Test có sẵn trong `app/src/test/` | **33 phương thức `@Test`, chưa chạy lại** |
-| Tổng số khai báo test | **129**, đếm từ source; chưa xác nhận Gradle discover |
+| Tổng số khai báo test | **159**, đếm từ source; chưa xác nhận Gradle discover |
 | Build / assemble / lint / unit test / UI test | **Chưa chạy** |
 | Wi-Fi, quyền Android, GPS, Back/tab/background thật | **Chưa kiểm chứng trên runtime** |
+
+## Thay đổi và kiểm tra BUG-10–11
+
+### BUG-10: vòng đời Radar
+
+- Giữ `ViewModelProvider`/factory và application context đã đưa vào từ BUG-04–06. Radar không còn nhận trực tiếp `PermissionHelper`; chỉ giữ repository/use case và đồng hồ monotonic.
+- `MainActivity.onStart/onStop` bật/tắt quan sát. Chuyển tab giữ một observer chung vì Trang chủ và Đo mạng cũng dùng Radar; xuống nền dừng polling và nguồn Wi-Fi. `onResume`, callback cấp quyền và nút thử lại yêu cầu làm mới; refresh khi đang ở nền không truy cập phần cứng.
+- Yêu cầu foreground/refresh có revision; `collectLatest` hủy và chờ cleanup trước khi tạo collector tiếp theo. Stop/start nhanh không bị gộp thành trạng thái cũ; dữ liệu/lỗi trả về muộn không được thay trạng thái của lượt mới.
+- ViewModelStore giữ instance/nhu cầu khi Activity được tạo lại, clear hủy scope. Các test giả đã được viết; Activity recreation, process death và việc gỡ callback Android thật **chưa chạy**.
+
+### BUG-11: lỗi, tuổi mẫu và phục hồi
+
+- Bỏ `.catch {}` rỗng. Phân biệt nguồn lỗi, quyền bị từ chối, Flow kết thúc ngoài dự kiến và không có mẫu mới. Ngoại lệ đăng ký callback Wi-Fi được chuyển tới Radar.
+- Lỗi/stop/thay điều kiện làm mất hiệu lực mẫu hiện tại. Sau **5 giây** không nhận mẫu dùng được, watchdog ẩn dữ liệu kể cả khi cleanup chưa xong; readiness khóa phép đo mới. Tuổi mẫu tính bằng đồng hồ monotonic và cập nhật mỗi giây khi foreground. Đây là tuổi mẫu nhận từ luồng Radar, không phải timestamp phần cứng của `WifiInfo`.
+- Tối đa **3 lần tự thử lại**, chờ **1/2/4 giây**, tức tối đa 4 lần mở nguồn trong một chu kỳ. Một mẫu thành công không xóa ngân sách retry, để tránh vòng lặp phát-mẫu-rồi-lỗi vô hạn. Chu kỳ mới bắt đầu khi foreground trở lại, điều kiện quyền/Wi-Fi/vị trí thay đổi hoặc người dùng bấm thử lại.
+- `SecurityException` dừng retry nguồn ngay; chỉ tiếp tục kiểm tra điều kiện mỗi giây. Thay đổi điều kiện hoặc refresh cho phép đăng ký lại. `CancellationException` đi theo luồng hủy, không trở thành thông báo lỗi.
+- Trang chủ, Đo mạng và Radar hiển thị thông báo/tuổi mẫu/nút thử lại. Radar không hiện RSSI, LinkSpeed hoặc tần số giả khi chưa có mẫu. Kết quả đo đã hoàn tất vẫn dùng snapshot bất biến của chính nó.
+
+### 30 test mới đã viết — chưa thực thi
+
+| Nhóm tình huống | Số ca | Kỳ vọng trong assertion | Kết quả chạy |
+| --- | ---: | --- | --- |
+| Khởi tạo ở nền, start lặp, stop, stop/start nhanh, refresh khi cleanup, stop khi cleanup | 6 | Không đọc phần cứng ở nền; tối đa một collector; chờ cleanup | Chưa chạy |
+| ViewModelProvider/Store: recreation, clear, mở lại | 3 | Giữ instance/nhu cầu khi store còn; hủy khi clear; instance mới khi mở lại | Chưa chạy |
+| Nguồn lỗi rồi hồi phục, backoff giới hạn, emit-rồi-lỗi, retry thủ công | 4 | Ẩn mẫu lỗi; lịch 1/2/4 giây; tối đa 4 lần mở nguồn | Chưa chạy |
+| SecurityException, thu hồi/cấp lại quyền, bật vị trí, mất/kết nối Wi-Fi | 5 | Không retry quyền vô hạn; điều kiện phục hồi khởi động lại | Chưa chạy |
+| Flow kết thúc, im lặng, không có mẫu đầu, cleanup chậm, mẫu unavailable, luồng khỏe | 6 | Flow kết thúc là lỗi; watchdog 5 giây; không timeout giả với mẫu định kỳ | Chưa chạy |
+| Xuống nền trong backoff, lỗi cleanup muộn, emission NonCancellable muộn | 3 | Không retry ngầm hoặc ghi đè trạng thái đã tạm dừng | Chưa chạy |
+| Lỗi đọc điều kiện, lỗi refresh, kết quả đo cũ | 3 | Báo lỗi/hồi phục; không mở nguồn khi refresh bị từ chối; giữ snapshot đã đo | Chưa chạy |
+
+Các test dùng `StandardTestDispatcher`, thời gian ảo và repository giả, không tạo socket hay gọi Wi-Fi thật. Dùng `runCurrent`/`advanceTimeBy` có giới hạn; clear ViewModelStore khi teardown. Không dùng `advanceUntilIdle` cho polling vô hạn. Test ViewModelStore không thay thế test Activity/Compose trên Android.
+
+### Kết quả rà soát tĩnh của đợt này
+
+- `git -c core.safecrlf=false diff --check`: exit **0**, không có lỗi whitespace trong diff được theo dõi.
+- `rg -c '@Test' tests/src/test/kotlin`: **126** khai báo; `app/src/test`: **33**. File mới có **30** khai báo; không phải 30 test đã pass.
+- Đối chiếu các lời gọi constructor Radar và chữ ký Home/Measure/Radar với navigation; fixture `onlineRadar()` đặt `isSampleAvailable = true`, còn trạng thái mặc định là false.
+- Kiểm tra import trùng trong các file Kotlin thay đổi/thêm mới: **0**.
+- Rà thứ tự cancel/join, kiểm tra revision/điều kiện trước khi nhận mẫu, dừng backoff khi xuống nền, invalidation trước cleanup chậm và giữ nguyên luồng kết quả đã hoàn tất.
+- **Chưa có exit code của Gradle, JUnit XML hay log runtime.** Không khẳng định Kotlin đã biên dịch hoặc callback Android đã được dọn thành công trên thiết bị.
 
 ## Thay đổi BUG-04–06 cần kiểm chứng
 
@@ -102,12 +143,13 @@ Thư mục `tests/src/test/kotlin/com/mobilelegend/wlo/regression/` đã đượ
 | [WifiReadinessTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/WifiReadinessTest.kt) | 14 | Quyền API 26–34; busy/offline/chờ/ẩn định danh/sensor lỗi; UI và ViewModel cùng lý do; use case kiểm tra lại; thu hồi/cấp lại quyền | Chưa chạy |
 | [WifiSnapshotCacheTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/WifiSnapshotCacheTest.kt) | 5 | Cache theo network ID, đổi mạng, callback mất mạng cũ, đăng ký cũ sau thay quyền và mẫu redacted | Chưa chạy |
 | [LocationDataPolicyTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationDataPolicyTest.kt) | 12 | Tâm mặc định, metadata, gần đúng/cũ/mock/invalid, Mountain View thật, không kéo demo, lọc demo, khoảng cách và hai lượt A/B | Chưa chạy |
+| [LiveRadarLifecycleTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LiveRadarLifecycleTest.kt) | 30 | Foreground, cleanup, ViewModelStore, lỗi/retry, quyền/mạng, dữ liệu hết hạn và kết quả muộn | Chưa chạy |
 
-96 test mới dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; một ca dùng worker thread và latch có timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
+126 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; một ca dùng worker thread và latch có timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
 
 Các test cũ đã được cập nhật ở mức source: assertion nhãn LinkSpeed, repository giả dùng API phiên đo và fixture lịch sử có timestamp cố định. Hai test `PingTesterTest` cũ vẫn có kết nối mạng thật.
 
-## Rà soát tĩnh đã thực hiện
+## Rà soát tĩnh của các đợt trước (BUG-01–09)
 
 ```text
 git -c core.safecrlf=false diff --check: exit 0, không có lỗi whitespace
@@ -149,11 +191,15 @@ bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.WifiSnapshotCacheTest' \
   --tests 'com.mobilelegend.wlo.regression.LocationDataPolicyTest'
 
-# Chạy toàn bộ 96 test hồi quy BUG-01–09.
+# Chạy riêng 30 test BUG-10–11 bằng Flow giả và đồng hồ ảo.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.LiveRadarLifecycleTest'
+
+# Chạy toàn bộ 126 test hồi quy BUG-01–11.
 bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.*'
 
-# Toàn bộ 129 khai báo test, bao gồm hai test socket thật cũ.
+# Toàn bộ 159 khai báo test, bao gồm hai test socket thật cũ.
 bash ./gradlew --no-daemon :app:testDebugUnitTest
 
 # Biên dịch APK và kiểm tra Android lint.
@@ -192,11 +238,17 @@ Nếu dừng ở dependency/SDK/biên dịch, ghi đúng giai đoạn; không gh
 | Hai lượt đo có GPS tại A/B rồi di chuyển tới C | Hai ID/marker giữ tọa độ A/B, chỉ khoảng cách thay đổi | Chưa chạy |
 | Kéo bản đồ ra xa rồi bấm định vị khi fix hợp lệ không đổi tọa độ | Camera về đúng fix; không chờ tọa độ phải thay đổi | Chưa chạy |
 | Tắt dịch vụ vị trí khi request đang chờ; callback fix về muộn | Không nhận fix đó làm vị trí dùng được; listener/timeout được dọn | Chưa chạy |
+| Tái tạo Activity, chuyển tab nhiều lần, đưa app xuống nền rồi mở lại | Giữ một Radar trong store; xuống nền gỡ callback/dừng polling; trở lại nhận mẫu mới | Chưa chạy |
+| Nguồn Radar ném lỗi/hoàn tất/im lặng, bấm thử lại liên tục | Báo lỗi, ẩn mẫu hết hạn, retry hữu hạn, không có hai collector | Chưa chạy |
+| Từ chối đăng ký callback rồi cấp lại quyền/quay về từ Settings | Không đăng ký lặp vô hạn khi bị từ chối; khôi phục sau thay đổi/refresh | Chưa chạy |
+| Đóng hẳn Activity khi Radar hoặc retry đang chạy | ViewModelStore clear dọn nguồn và job; mở lại không còn callback của owner cũ | Chưa chạy |
 
 Ghi thiết bị, Android API, thao tác, network/SSID/BSSID trước và sau, số bản ghi và log quan sát được khi thực hiện từng ca. Chỉ đánh dấu Pass/Fail khi đã chạy thật.
 
 ## Nguồn API đã đối chiếu
 
+- [Android ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel) và [lifecycle-aware coroutines](https://developer.android.com/topic/libraries/architecture/coroutines): owner/store và vòng đời coroutine.
+- [Kotlin collectLatest](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.flow/collect-latest.html): hủy xử lý giá trị trước khi yêu cầu mới đến.
 - [Android NetworkCallback](https://developer.android.com/reference/android/net/ConnectivityManager.NetworkCallback): vòng đời callback, cờ thông tin vị trí từ API 31 và dữ liệu callback.
 - [Android Network.getSocketFactory](https://developer.android.com/reference/android/net/Network#getSocketFactory()): tạo socket gắn với mạng.
 - [Kotlin suspendCancellableCoroutine](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/suspend-cancellable-coroutine.html): hủy coroutine và đóng tài nguyên.

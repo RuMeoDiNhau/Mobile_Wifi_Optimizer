@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         val viewModels = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T = when (modelClass) {
-                LiveRadarViewModel::class.java -> LiveRadarViewModel(streamLiveWifiUseCase, wifiRepository, permissionHelper) as T
+                LiveRadarViewModel::class.java -> LiveRadarViewModel(streamLiveWifiUseCase, wifiRepository) as T
                 MeasureViewModel::class.java -> MeasureViewModel(performBenchmarkUseCase) as T
                 else -> error("Unknown ViewModel: $modelClass")
             }
@@ -91,12 +91,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        liveRadarViewModel.setForeground(true)
+    }
+
     override fun onResume() {
         super.onResume()
         liveRadarViewModel.refreshHardwareStatus()
     }
 
     override fun onStop() {
+        if (::liveRadarViewModel.isInitialized) liveRadarViewModel.setForeground(false)
         // A foreground-only measurement must not continue after leaving the activity.
         if (::measureViewModel.isInitialized) measureViewModel.cancelBenchmark()
         super.onStop()

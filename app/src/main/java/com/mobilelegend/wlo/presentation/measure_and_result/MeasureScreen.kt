@@ -66,6 +66,7 @@ fun MeasureScreen(
     onOpenAppSettings: () -> Unit,
     onOpenLocationSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
+    radarNotice: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -96,6 +97,7 @@ fun MeasureScreen(
         verticalArrangement = Arrangement.Center
     ) {
         MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
+        radarNotice()
         when (val status = uiState.status) {
             is MeasureStatus.Measuring -> {
                 // Pulse Animation Box
