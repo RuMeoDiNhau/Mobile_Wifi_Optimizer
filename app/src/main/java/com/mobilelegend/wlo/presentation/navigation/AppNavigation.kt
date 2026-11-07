@@ -3,9 +3,9 @@ package com.mobilelegend.wlo.presentation.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -23,8 +24,8 @@ import com.mobilelegend.wlo.core.permissions.PermissionHelper
 import com.mobilelegend.wlo.data.sensor.DeviceLocationProvider
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.model.MeasurementLocation
-import com.mobilelegend.wlo.presentation.components.toWifiPlace
 import com.mobilelegend.wlo.presentation.components.DefaultWifiPlaces
+import com.mobilelegend.wlo.presentation.components.toWifiPlace
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.WloBottomNavigationBar
@@ -59,29 +60,64 @@ fun AppNavigation(
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
 
     var userLocation by remember { mutableStateOf(locationProvider.getCurrentLocation()) }
-    var places by remember {
-        mutableStateOf(
-            locationProvider.syncPlacesWithUserLocation(DefaultWifiPlaces, userLocation)
-        )
-    }
+    var demoPlaces by remember { mutableStateOf(DefaultWifiPlaces) }
     var selectedNeed by remember { mutableStateOf(WifiNeedOption.WORK) }
-    var areaScore by remember { mutableIntStateOf(92) }
     var inspectedPlace by remember { mutableStateOf<WifiPlaceItem?>(null) }
 
     val radarState by liveRadarViewModel.uiState.collectAsStateWithLifecycle()
     val measureState by measureViewModel.uiState.collectAsStateWithLifecycle()
 
-    val refreshGpsAndSyncPlaces: () -> Unit = {
+    // Pure projection of the ViewModel store: composition never inserts measurements.
+    val places = (measureState.savedSpots.asReversed().mapNotNull { spot ->
+        spot.score.toWifiPlace()?.copy(name = spot.spotName, isSaved = spot.isSaved)
+    } + locationProvider.syncPlacesWithUserLocation(demoPlaces, userLocation)).mapIndexed { index, place -> place.copy(rank = index + 1) }
+    val areaScore = measureState.savedSpots.lastOrNull()?.score?.finalScore ?: 92
+    val toggleSavePlace: (String) -> Unit = { placeId ->
+        val measurementId = places.find { it.id == placeId }?.measurement?.measurement?.id
+        if (measurementId != null) {
+            measureViewModel.toggleSpotSaved(measurementId)
+        } else {
+            demoPlaces = demoPlaces.map { if (it.id == placeId) it.copy(isSaved = !it.isSaved) else it }
+        }
+    }
+
+    // Runs for system Back as well as tab buttons. The graph, not a fading-out screen,
+    // owns cancellation, so disposing an old screen cannot cancel a newer measurement.
+    DisposableEffect(navController, measureViewModel) {
+        var previousRoute = navController.currentDestination?.route
+        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
+            val leavingMeasurement = previousRoute == Screen.NetworkMeasure.route ||
+                previousRoute == Screen.MeasureBenchmark.route
+            if (leavingMeasurement && destination.route != previousRoute) {
+                measureViewModel.cancelBenchmark()
+            }
+            previousRoute = destination.route
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose {
+            navController.removeOnDestinationChangedListener(listener)
+            measureViewModel.cancelBenchmark()
+        }
+    }
+
+    val startCurrentNetworkMeasurement: () -> Unit = {
+        inspectedPlace = null
+        liveRadarViewModel.selectCategory(selectedNeed.category)
+        val locationAtStart = locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) }
+        measureViewModel.startBenchmark(
+            selectedNeed.category,
+            locationAtStart
+        )
+    }
+
+    val refreshUserLocation: () -> Unit = {
         locationProvider.requestSingleUpdate { latestCoord ->
             userLocation = latestCoord
-            places = locationProvider.syncPlacesWithUserLocation(places, latestCoord)
         }
     }
 
     LaunchedEffect(radarState.isLocationPermissionGranted, radarState.isGpsEnabled) {
-        if (radarState.isLocationPermissionGranted) {
-            refreshGpsAndSyncPlaces()
-        }
+        if (radarState.isLocationPermissionGranted) refreshUserLocation()
     }
 
     val navigateToTab: (Screen) -> Unit = { targetScreen ->
@@ -101,9 +137,7 @@ fun AppNavigation(
             WloBottomNavigationBar(
                 currentRoute = currentRoute,
                 onNavigate = { target ->
-                    if (target != Screen.NetworkMeasure) {
-                        inspectedPlace = null
-                    }
+                    inspectedPlace = null
                     navigateToTab(target)
                 }
             )
@@ -124,19 +158,13 @@ fun AppNavigation(
                         selectedNeed = option
                         liveRadarViewModel.selectCategory(option.category)
                     },
-                    onToggleSavePlace = { placeId ->
-                        places = places.map {
-                            if (it.id == placeId) it.copy(isSaved = !it.isSaved) else it
-                        }
-                    },
+                    onToggleSavePlace = toggleSavePlace,
                     onOpenMap = {
                         navigateToTab(Screen.WifiMap)
                     },
                     onStartMeasureHere = {
-                        inspectedPlace = null
-                        liveRadarViewModel.selectCategory(selectedNeed.category)
-                        measureViewModel.startBenchmark(selectedNeed.category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
                         navigateToTab(Screen.NetworkMeasure)
+                        startCurrentNetworkMeasurement()
                     },
                     onPlaceClick = { place ->
                         inspectedPlace = place
@@ -150,7 +178,7 @@ fun AppNavigation(
                 WifiMapScreen(
                     places = places,
                     userLocation = userLocation,
-                    onRefreshUserLocation = refreshGpsAndSyncPlaces,
+                    onRefreshUserLocation = refreshUserLocation,
                     onInspectPlace = { place ->
                         inspectedPlace = place
                         navigateToTab(Screen.NetworkMeasure)
@@ -166,18 +194,7 @@ fun AppNavigation(
                     inspectedPlace = inspectedPlace,
                     onOpenLocationSettings = onOpenLocationSettings,
                     onOpenAppSettings = onOpenAppSettings,
-                    onScoreMeasured = { score ->
-                        areaScore = score.finalScore
-                        score.toWifiPlace()?.let { measuredPlace ->
-                            places = (listOf(measuredPlace) + places.filterNot { it.id == measuredPlace.id })
-                                .mapIndexed { index, place -> place.copy(rank = index + 1) }
-                        }
-                    },
-                    onMeasureCurrentNetwork = {
-                        inspectedPlace = null
-                        liveRadarViewModel.selectCategory(selectedNeed.category)
-                        measureViewModel.startBenchmark(selectedNeed.category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
-                    }
+                    onMeasureCurrentNetwork = startCurrentNetworkMeasurement
                 )
             }
 
@@ -186,11 +203,7 @@ fun AppNavigation(
                 SavedPlacesScreen(
                     places = places,
                     sessionSpots = measureState.savedSpots,
-                    onToggleSavePlace = { placeId ->
-                        places = places.map {
-                            if (it.id == placeId) it.copy(isSaved = !it.isSaved) else it
-                        }
-                    },
+                    onToggleSavePlace = toggleSavePlace,
                     onRemoveSessionSpot = { spotId ->
                         measureViewModel.removeSpotFromHistory(spotId)
                     },
@@ -226,6 +239,7 @@ fun AppNavigation(
                     viewModel = liveRadarViewModel,
                     onNavigateToBenchmark = { category ->
                         navController.navigate(Screen.MeasureBenchmark.createRoute(category.name))
+                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
                     },
                     onOpenLocationSettings = onOpenLocationSettings,
                     onOpenAppSettings = onOpenAppSettings
@@ -246,8 +260,16 @@ fun AppNavigation(
                 MeasureScreen(
                     category = category,
                     viewModel = measureViewModel,
+                    onStartMeasurement = {
+                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().takeIf { it.isRealFix }?.let { MeasurementLocation(it.latitude, it.longitude) })
+                    },
                     onBenchmarkCompleted = {
-                        navController.navigate(Screen.Result.route)
+                        if (navController.currentDestination?.route == Screen.MeasureBenchmark.route) {
+                            navController.navigate(Screen.Result.route) {
+                                popUpTo(Screen.MeasureBenchmark.route) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
                     },
                     onBackToRadar = {
                         navController.popBackStack()

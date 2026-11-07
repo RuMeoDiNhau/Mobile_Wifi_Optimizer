@@ -1,6 +1,5 @@
 package com.mobilelegend.wlo.domain.repository
 
-import com.mobilelegend.wlo.data.model.PingResult
 import com.mobilelegend.wlo.data.model.WifiMetric
 import kotlinx.coroutines.flow.Flow
 
@@ -20,9 +19,9 @@ interface WifiRepository {
     fun getCurrentWifiMetric(): WifiMetric
 
     /**
-     * Thực hiện chuỗi đo độ trễ Ping (3 gói tin) bất đồng bộ.
+     * Giữ cùng một mạng Wi-Fi cho toàn bộ phép đo; luôn dọn tài nguyên sau block.
      */
-    suspend fun measurePing(packetsCount: Int = 3): PingResult
+    suspend fun <T> withBenchmarkSession(block: suspend (WifiBenchmarkSession) -> T): T
 
     /**
      * Kiểm tra trạng thái kết nối Wi-Fi.
@@ -33,4 +32,5 @@ interface WifiRepository {
      * Kiểm tra quyền và dịch vụ GPS đã sẵn sàng hay chưa.
      */
     fun isReadyForScanning(): Boolean
+
 }

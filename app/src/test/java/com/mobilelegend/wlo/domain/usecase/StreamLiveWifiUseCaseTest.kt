@@ -4,6 +4,7 @@ import com.mobilelegend.wlo.data.model.PingResult
 import com.mobilelegend.wlo.data.model.WifiMetric
 import com.mobilelegend.wlo.domain.model.SignalQualityLevel
 import com.mobilelegend.wlo.domain.repository.WifiRepository
+import com.mobilelegend.wlo.domain.repository.WifiBenchmarkSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -33,7 +34,8 @@ class StreamLiveWifiUseCaseTest {
 
         override fun getLiveWifiStream(): Flow<WifiMetric> = flowOf(currentMetric)
         override fun getCurrentWifiMetric(): WifiMetric = currentMetric
-        override suspend fun measurePing(packetsCount: Int): PingResult = PingResult(20, 0, true)
+        override suspend fun <T> withBenchmarkSession(block: suspend (WifiBenchmarkSession) -> T): T =
+            error("Live radar must not start a benchmark session")
         override fun isWifiConnected(): Boolean = currentMetric.isConnected
         override fun isReadyForScanning(): Boolean = true
     }

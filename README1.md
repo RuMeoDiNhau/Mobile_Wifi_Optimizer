@@ -1,6 +1,7 @@
 # Ghi chú review và hướng sửa lỗi Mobile_Wifi_Optimizer
 
-> **Cập nhật BUG-01–03:** Sửa hiển thị dữ liệu thiếu/lỗi, dùng đúng LinkSpeed và gắn kết quả với snapshot mạng, thời gian, vị trí. Thêm 29 test hồi quy. Chưa chạy build/lint/test vì không có runner độc lập và yêu cầu không test trên máy người dùng. Xem [báo cáo](tests/README.md).
+
+> **Cập nhật 07/11/2026:** Đã thay đổi code cho BUG-01 đến BUG-06. Đợt BUG-04–06 chuyển lịch sử về ViewModel theo ID, gắn TCP với một phiên Wi-Fi có kiểm tra mất/đổi mạng, quản lý một job và hủy khi rời màn đo. Thêm 36 test, nâng bộ hồi quy trong `tests/` lên 65 test (cộng 33 test cũ là 98 khai báo). **Chưa chạy build/lint/unit test/UI test** vì phiên làm việc chỉ có môi trường trên máy người dùng, trong khi yêu cầu không chạy test ở máy này. Xem [báo cáo, giới hạn và cách chạy kiểm thử](tests/README.md). Phần bên dưới giữ nguyên nội dung review ngày 03/11/2026; chưa coi các bản sửa là đã kiểm chứng trên runtime, các BUG khác chưa được xác nhận hoàn tất.
 
 Tài liệu tổng hợp các vấn đề phát hiện khi đọc source để nhóm xem xét và sửa sau. Các mục bên dưới là đề xuất; chưa có thay đổi nào đối với code ứng dụng trong quá trình lập tài liệu này.
 

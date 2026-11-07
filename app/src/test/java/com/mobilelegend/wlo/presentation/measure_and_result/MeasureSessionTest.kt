@@ -3,6 +3,7 @@ package com.mobilelegend.wlo.presentation.measure_and_result
 import com.mobilelegend.wlo.data.model.PingResult
 import com.mobilelegend.wlo.data.model.WifiMetric
 import com.mobilelegend.wlo.domain.model.LocationScore
+import com.mobilelegend.wlo.domain.model.MeasurementContext
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -90,7 +91,8 @@ class MeasureSessionTest {
                 isRecommended = finalScore >= 75,
                 rawRssi = -60,
                 rawPingMs = 30,
-                rawLinkSpeedMbps = 150
+                rawLinkSpeedMbps = 150,
+                measurement = MeasurementContext(id, "Test Wi-Fi", "AA:BB:CC:DD:EE:01", 1234L)
             )
         )
     }

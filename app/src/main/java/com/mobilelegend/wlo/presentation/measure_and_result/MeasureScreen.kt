@@ -59,13 +59,10 @@ fun MeasureScreen(
     viewModel: MeasureViewModel,
     onBenchmarkCompleted: () -> Unit,
     onBackToRadar: () -> Unit,
+    onStartMeasurement: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    LaunchedEffect(category) {
-        viewModel.startBenchmark(category)
-    }
 
     LaunchedEffect(uiState.status) {
         if (uiState.status is MeasureStatus.Completed) {
@@ -167,6 +164,8 @@ fun MeasureScreen(
                     color = PrimaryBlue,
                     trackColor = SurfaceDark
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = viewModel::cancelBenchmark) { Text("Hủy phép đo") }
             }
 
             is MeasureStatus.Failed -> {
@@ -191,12 +190,25 @@ fun MeasureScreen(
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(
-                    onClick = { viewModel.startBenchmark(category) },
+                    onClick = onStartMeasurement,
+                    enabled = !uiState.isBenchmarkRunning,
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlueVariant),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(text = "Thử lại", fontWeight = FontWeight.Bold)
                 }
+            }
+
+            MeasureStatus.Idle, MeasureStatus.Cancelled -> {
+                Text(if (uiState.status == MeasureStatus.Cancelled) "Đã hủy phép đo" else "Sẵn sàng đo", color = TextPrimary)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onStartMeasurement,
+                    enabled = !uiState.isBenchmarkRunning
+                ) {
+                    Text(if (uiState.isBenchmarkRunning) "Đang dọn kết nối..." else "Đo lại")
+                }
+                Button(onClick = onBackToRadar) { Text("Quay lại") }
             }
 
             else -> {

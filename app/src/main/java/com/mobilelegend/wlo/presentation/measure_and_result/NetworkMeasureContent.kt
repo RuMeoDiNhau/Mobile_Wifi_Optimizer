@@ -84,6 +84,11 @@ fun networkMeasureContent(
             description = status.errorMessage,
             statusLabel = "Thất bại"
         )
+        MeasureStatus.Cancelled -> NetworkMeasureContent(
+            headline = "Đã hủy phép đo",
+            description = "Lượt đo bị hủy không được lưu. Bạn có thể bắt đầu lượt mới sau khi dọn xong kết nối.",
+            statusLabel = "Đã hủy"
+        )
         MeasureStatus.Idle -> {
             val reason = measurementBlockReason(radar)
             NetworkMeasureContent(

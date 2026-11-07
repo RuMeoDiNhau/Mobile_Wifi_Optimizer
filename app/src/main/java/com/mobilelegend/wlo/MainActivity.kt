@@ -1,14 +1,16 @@
 package com.mobilelegend.wlo
 
 import android.Manifest
-import android.os.Build
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.compose.rememberNavController
 import com.mobilelegend.wlo.core.network.PingTester
 import com.mobilelegend.wlo.core.permissions.PermissionHelper
@@ -39,10 +41,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // 1. Khởi tạo Core & Hardware
-        permissionHelper = PermissionHelper(this)
-        val wifiScanner = WifiScanner(this)
+        permissionHelper = PermissionHelper(applicationContext)
+        val wifiScanner = WifiScanner(applicationContext)
         val pingTester = PingTester()
-        val wifiRepository = WifiRepositoryImpl(wifiScanner, pingTester, permissionHelper)
+        val wifiRepository = WifiRepositoryImpl(wifiScanner, pingTester, permissionHelper, applicationContext)
 
         // 2. Khởi tạo UseCases
         val streamLiveWifiUseCase = StreamLiveWifiUseCase(wifiRepository)
@@ -50,8 +52,16 @@ class MainActivity : ComponentActivity() {
         val performBenchmarkUseCase = PerformBenchmarkUseCase(wifiRepository, calculateScoreUseCase)
 
         // 3. Khởi tạo ViewModels
-        liveRadarViewModel = LiveRadarViewModel(streamLiveWifiUseCase, wifiRepository, permissionHelper)
-        measureViewModel = MeasureViewModel(performBenchmarkUseCase)
+        val viewModels = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = when (modelClass) {
+                LiveRadarViewModel::class.java -> LiveRadarViewModel(streamLiveWifiUseCase, wifiRepository, permissionHelper) as T
+                MeasureViewModel::class.java -> MeasureViewModel(performBenchmarkUseCase) as T
+                else -> error("Unknown ViewModel: $modelClass")
+            }
+        })
+        liveRadarViewModel = viewModels[LiveRadarViewModel::class.java]
+        measureViewModel = viewModels[MeasureViewModel::class.java]
 
         // 4. Yêu cầu cấp quyền khi mở ứng dụng lần đầu
         requestRequiredPermissions()
@@ -82,6 +92,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         liveRadarViewModel.refreshHardwareStatus()
+    }
+
+    override fun onStop() {
+        // A foreground-only measurement must not continue after leaving the activity.
+        if (::measureViewModel.isInitialized) measureViewModel.cancelBenchmark()
+        super.onStop()
     }
 
     private fun requestRequiredPermissions() {

@@ -6,7 +6,8 @@ data class MeasurementContext(
     val ssid: String,
     val bssid: String,
     val measuredAtMillis: Long,
-    val location: MeasurementLocation? = null
+    val location: MeasurementLocation? = null,
+    val networkId: String? = null
 )
 
 data class MeasurementLocation(val latitude: Double, val longitude: Double)

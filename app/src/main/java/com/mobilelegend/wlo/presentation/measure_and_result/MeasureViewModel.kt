@@ -6,101 +6,145 @@ import com.mobilelegend.wlo.domain.model.LocationScore
 import com.mobilelegend.wlo.domain.model.MeasurementLocation
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.usecase.PerformBenchmarkUseCase
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 
-/**
- * ViewModel điều phối tiến trình Benchmark 1-chạm (3s) và quản lý lịch sử so sánh trong RAM.
- */
+/** Owns one benchmark and the immutable measurements retained for this app session. */
 class MeasureViewModel(
     private val performBenchmarkUseCase: PerformBenchmarkUseCase
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(MeasureUiState())
     val uiState: StateFlow<MeasureUiState> = _uiState.asStateFlow()
+    private val lock = Any()
+    private var benchmarkJob: Job? = null
+    private var generation = 0L
+    private val recordedIds = mutableSetOf<String>()
 
-    /**
-     * Bắt đầu quy trình kiểm định 1-chạm kéo dài 3 giây.
-     */
-    fun startBenchmark(category: UseCaseCategory, location: MeasurementLocation? = null) {
-        _uiState.update { it.copy(selectedCategory = category, status = MeasureStatus.Measuring(0f, "Đang chuẩn bị đo...")) }
-
-        viewModelScope.launch {
-            try {
-                // Giai đoạn 1: Đọc cảm biến phần cứng (1s)
-                _uiState.update {
-                    it.copy(status = MeasureStatus.Measuring(0.33f, "Đang đọc cường độ sóng RSSI và LinkSpeed..."))
+    /** Reject repeated starts, including while the previous job is cleaning up. */
+    fun startBenchmark(category: UseCaseCategory, location: MeasurementLocation? = null): Boolean =
+        synchronized(lock) {
+            if (benchmarkJob != null) return@synchronized false
+            val runId = ++generation
+            // Assign ownership before execution, including with an immediate Main dispatcher.
+            val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    val score = performBenchmarkUseCase(category, location)
+                    currentCoroutineContext().ensureActive()
+                    synchronized(lock) {
+                        if (runId == generation && benchmarkJob?.isActive == true) {
+                            val measurement = requireNotNull(score.measurement)
+                            val firstResult = recordedIds.add(measurement.id)
+                            _uiState.update { state ->
+                                val spots = if (firstResult) state.savedSpots + SavedSpotItem(
+                                    id = measurement.id,
+                                    spotName = "Lượt đo #${recordedIds.size} (${category.title})",
+                                    score = score,
+                                    timestamp = measurement.measuredAtMillis
+                                ) else state.savedSpots
+                                state.copy(status = MeasureStatus.Completed(score), savedSpots = spots)
+                            }
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    synchronized(lock) {
+                        if (runId == generation && benchmarkJob?.isActive == true) {
+                            _uiState.update {
+                                it.copy(status = MeasureStatus.Failed(error.localizedMessage ?: "Lỗi không xác định khi đo"))
+                            }
+                        }
+                    }
                 }
-                delay(1000)
-
-                // Giai đoạn 2: Đo độ trễ Socket Ping (1.5s)
-                _uiState.update {
-                    it.copy(status = MeasureStatus.Measuring(0.66f, "Đang gửi gói tin Socket kiểm tra Ping 1.1.1.1..."))
-                }
-                val score = performBenchmarkUseCase(category, location)
-                delay(800)
-
-                // Giai đoạn 3: Tính toán điểm số (0.5s)
-                _uiState.update {
-                    it.copy(status = MeasureStatus.Measuring(1.0f, "Đang tổng hợp điểm số và phân tích nhu cầu..."))
-                }
-                delay(400)
-
-                // Hoàn tất và tự động thêm vào lịch sử phiên
-                val autoSpot = SavedSpotItem(
-                    id = requireNotNull(score.measurement).id,
-                    spotName = "Lượt đo #${_uiState.value.savedSpots.size + 1} (${category.title})",
-                    score = score,
-                    timestamp = requireNotNull(score.measurement).measuredAtMillis
+            }
+            benchmarkJob = job
+            _uiState.update {
+                it.copy(
+                    selectedCategory = category,
+                    isBenchmarkRunning = true,
+                    status = MeasureStatus.Measuring(0.5f, "Đang kiểm tra Wi-Fi và đo độ trễ TCP...")
                 )
-                _uiState.update {
-                    it.copy(
-                        status = MeasureStatus.Completed(score),
-                        savedSpots = it.savedSpots + autoSpot
-                    )
+            }
+            // Also runs when cancelled before the lazy coroutine body ever starts.
+            job.invokeOnCompletion {
+                synchronized(lock) {
+                    if (benchmarkJob === job) {
+                        benchmarkJob = null
+                        _uiState.update { state ->
+                            state.copy(
+                                isBenchmarkRunning = false,
+                                status = if (state.status is MeasureStatus.Measuring) MeasureStatus.Cancelled else state.status
+                            )
+                        }
+                    }
                 }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(status = MeasureStatus.Failed(e.localizedMessage ?: "Lỗi không xác định khi đo"))
-                }
+            }
+            job.start()
+            true
+        }
+
+    /** Rename/bookmark the existing record. A stale result cannot recreate a deleted record. */
+    fun saveSpotToHistory(name: String, score: LocationScore) {
+        val id = score.measurement?.id ?: return
+        synchronized(lock) {
+            _uiState.update { state ->
+                state.copy(savedSpots = state.savedSpots.map { spot ->
+                    if (spot.id == id) spot.copy(
+                        spotName = name.trim().ifBlank { spot.spotName },
+                        isSaved = true
+                    ) else spot
+                })
             }
         }
     }
 
-    /**
-     * Lưu vị trí vừa đo vào danh sách so sánh tạm thời trong phiên (In-memory).
-     */
-    fun saveSpotToHistory(name: String, score: LocationScore) {
-        val spotName = name.ifBlank { "Vị trí #${_uiState.value.savedSpots.size + 1}" }
-        val newItem = SavedSpotItem(
-            id = UUID.randomUUID().toString(),
-            spotName = spotName,
-            score = score
-        )
-
-        _uiState.update { currentState ->
-            currentState.copy(savedSpots = currentState.savedSpots + newItem)
+    fun toggleSpotSaved(spotId: String) {
+        synchronized(lock) {
+            _uiState.update { state ->
+                state.copy(savedSpots = state.savedSpots.map {
+                    if (it.id == spotId) it.copy(isSaved = !it.isSaved) else it
+                })
+            }
         }
     }
 
-    /**
-     * Xóa một điểm đo khỏi danh sách so sánh.
-     */
     fun removeSpotFromHistory(spotId: String) {
-        _uiState.update { currentState ->
-            currentState.copy(savedSpots = currentState.savedSpots.filterNot { it.id == spotId })
+        synchronized(lock) {
+            _uiState.update { state ->
+                state.copy(savedSpots = state.savedSpots.filterNot { it.id == spotId })
+            }
         }
     }
 
-    /**
-     * Đặt lại trạng thái để đo lại.
-     */
+    fun cancelBenchmark() {
+        synchronized(lock) {
+            val job = benchmarkJob ?: return
+            generation++
+            _uiState.update {
+                if (it.status is MeasureStatus.Measuring) it.copy(status = MeasureStatus.Cancelled) else it
+            }
+            job.cancel()
+        }
+    }
+
     fun resetMeasureState() {
-        _uiState.update { it.copy(status = MeasureStatus.Idle) }
+        synchronized(lock) {
+            generation++
+            _uiState.update { it.copy(status = MeasureStatus.Idle) }
+            benchmarkJob?.cancel()
+        }
+    }
+
+    override fun onCleared() {
+        cancelBenchmark()
+        super.onCleared()
     }
 }

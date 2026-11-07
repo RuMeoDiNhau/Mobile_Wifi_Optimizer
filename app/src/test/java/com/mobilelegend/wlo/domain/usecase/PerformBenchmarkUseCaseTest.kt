@@ -4,6 +4,7 @@ import com.mobilelegend.wlo.data.model.PingResult
 import com.mobilelegend.wlo.data.model.WifiMetric
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.repository.WifiRepository
+import com.mobilelegend.wlo.domain.repository.WifiBenchmarkSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
@@ -38,9 +39,17 @@ class PerformBenchmarkUseCaseTest {
 
         override fun getLiveWifiStream(): Flow<WifiMetric> = emptyFlow()
         override fun getCurrentWifiMetric(): WifiMetric = metric
-        override suspend fun measurePing(packetsCount: Int): PingResult {
-            measuredPacketsCount = packetsCount
-            return ping
+        override suspend fun <T> withBenchmarkSession(block: suspend (WifiBenchmarkSession) -> T): T {
+            val captured = metric
+            return block(object : WifiBenchmarkSession {
+                override val networkId = "test-wifi"
+                override val initialMetric = captured
+                override fun ensureValid() = Unit
+                override suspend fun measurePing(packetsCount: Int): PingResult {
+                    measuredPacketsCount = packetsCount
+                    return ping
+                }
+            })
         }
         override fun isWifiConnected(): Boolean = metric.isConnected
         override fun isReadyForScanning(): Boolean = true

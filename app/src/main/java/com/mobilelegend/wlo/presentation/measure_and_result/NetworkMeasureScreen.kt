@@ -28,8 +28,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import com.mobilelegend.wlo.domain.model.LocationScore
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,17 +74,12 @@ fun NetworkMeasureScreen(
     onOpenLocationSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onMeasureCurrentNetwork: () -> Unit,
-    onScoreMeasured: (LocationScore) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val radarState by liveRadarViewModel.uiState.collectAsStateWithLifecycle()
     val measureState by measureViewModel.uiState.collectAsStateWithLifecycle()
 
-    val completedScore = (measureState.status as? MeasureStatus.Completed)?.score
-    LaunchedEffect(completedScore) {
-        completedScore?.let(onScoreMeasured)
-    }
-    val isMeasuring = measureState.status is MeasureStatus.Measuring
+    val isMeasuring = measureState.isBenchmarkRunning
     val content = networkMeasureContent(measureState.status, radarState, inspectedPlace)
     val blockReason = measurementBlockReason(radarState)
     val lastMeasureTimeText = content.measuredAtMillis?.let {
@@ -295,11 +288,18 @@ fun NetworkMeasureScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isMeasuring) "Đang đo..." else "Đo mạng đang kết nối",
+                        text = if (isMeasuring) {
+                            if (measureState.status is MeasureStatus.Measuring) "Đang đo..." else "Đang dọn kết nối..."
+                        } else "Đo mạng đang kết nối",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
+                }
+                if (measureState.status is MeasureStatus.Measuring) {
+                    Button(onClick = measureViewModel::cancelBenchmark) {
+                        Text("Hủy phép đo")
+                    }
                 }
             }
         }

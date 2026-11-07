@@ -10,11 +10,13 @@ data class SavedSpotItem(
     val id: String,
     val spotName: String,
     val score: LocationScore,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = requireNotNull(score.measurement).measuredAtMillis,
+    val isSaved: Boolean = true
 )
 
 sealed interface MeasureStatus {
     object Idle : MeasureStatus
+    object Cancelled : MeasureStatus
     data class Measuring(val progress: Float, val currentStepText: String) : MeasureStatus
     data class Completed(val score: LocationScore) : MeasureStatus
     data class Failed(val errorMessage: String) : MeasureStatus
@@ -23,5 +25,7 @@ sealed interface MeasureStatus {
 data class MeasureUiState(
     val status: MeasureStatus = MeasureStatus.Idle,
     val selectedCategory: UseCaseCategory = UseCaseCategory.GAMING,
-    val savedSpots: List<SavedSpotItem> = emptyList()
+    val savedSpots: List<SavedSpotItem> = emptyList(),
+    // Remains true until cancellation has finished closing the session and its sockets.
+    val isBenchmarkRunning: Boolean = false
 )
