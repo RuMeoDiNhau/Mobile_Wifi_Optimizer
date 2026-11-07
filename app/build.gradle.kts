@@ -50,6 +50,13 @@ android {
 
     testOptions {
         unitTests.all {
+            it.systemProperty("wlo.projectRoot", rootProject.projectDir.absolutePath)
+            // Resource-policy tests read source XML even when Android resources are not loaded.
+            it.inputs.files(
+                file("src/main/AndroidManifest.xml"),
+                file("src/main/res/xml/backup_rules.xml"),
+                file("src/main/res/xml/data_extraction_rules.xml")
+            )
             it.jvmArgs("-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8")
         }
     }

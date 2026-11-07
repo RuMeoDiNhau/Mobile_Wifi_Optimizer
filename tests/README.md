@@ -1,4 +1,4 @@
-# Kiểm thử BUG-01 đến BUG-17
+# Kiểm thử BUG-01 đến BUG-19
 
 Ngày ghi nhận: **07/11/2026** (Asia/Saigon).
 
@@ -19,11 +19,62 @@ Không có kết quả `BUILD SUCCESSFUL`, JUnit XML hoặc ảnh chạy ứng d
 | BUG-12–13 | Thêm 26 test: 13 deadline/tiến trình, 12 TCP/scoring, 1 socket giả bị đóng khi timeout |
 | BUG-14–15 | Thêm 45 test: 25 quản lý yêu cầu vị trí, 8 chọn/đánh giá mẫu và 12 danh sách Đã lưu |
 | BUG-16–17 | Thêm 36 test: 12 gợi ý Trang chủ, 11 luồng chọn nhu cầu/đo và 13 so sánh lịch sử |
-| Toàn bộ test hồi quy trong `tests/` | **233 phương thức `@Test`, 0 đã thực thi** |
+| BUG-18–19 | Thêm 24 test: 18 lọc/chọn địa điểm bản đồ và 6 cấu hình backup XML |
+| Toàn bộ test hồi quy trong `tests/` | **257 phương thức `@Test`, 0 đã thực thi** |
 | Test có sẵn trong `app/src/test/` | **33 phương thức `@Test`, chưa chạy lại** |
-| Tổng số khai báo test | **266**, đếm từ source; chưa xác nhận Gradle discover |
+| Tổng số khai báo test | **290**, đếm từ source; chưa xác nhận Gradle discover |
 | Build / assemble / lint / unit test / UI test | **Chưa chạy** |
 | Wi-Fi, quyền Android, GPS, Back/tab/background thật | **Chưa kiểm chứng trên runtime** |
+
+## Thay đổi và kiểm tra BUG-18–19
+
+### BUG-18: marker và chi tiết cùng một kết quả lọc
+
+- Giữ phần sửa fallback rỗng từ BUG-09; tách `mapContent` để marker, lựa chọn và thông báo rỗng cùng suy ra từ một snapshot. Tìm theo tên/khu vực, không phân biệt hoa thường và bỏ khoảng trắng hai đầu; kết hợp với bộ lọc, chế độ demo và kiểm tra tọa độ hợp lệ.
+- Chỉ giữ ID đang chọn nếu còn trong kết quả; nếu không, chọn điểm đầu tiên **trong kết quả lọc**, hoặc `null` khi rỗng. Bỏ ID mặc định giả. Xóa điểm, đổi bộ lọc hoặc tắt demo không giữ thẻ/nút chi tiết của điểm đã ẩn. Snapshot cùng ID được cập nhật thì chi tiết lấy đối tượng mới.
+- UI chỉ tạo thẻ và nút “Xem chi tiết” khi có lựa chọn. Thông báo phân biệt không khớp tìm kiếm/bộ lọc, chỉ có demo đang ẩn và chưa có tọa độ hợp lệ. Marker GPS thật vẫn có thể hiển thị dù không có điểm Wi-Fi phù hợp.
+- Effect camera đồng bộ ID đang chọn, theo dõi ID/tọa độ và MapView đã khởi tạo; không focus địa điểm khi lựa chọn null. Luồng bấm định vị vẫn đợi đúng ID yêu cầu GPS hoàn tất. Animation, callback marker và thứ tự effect Compose cần được kiểm chứng trên runtime.
+
+### BUG-19: cấu hình backup đầy đủ và có chính sách rõ ràng
+
+- Lịch sử/bookmark hiện chỉ thuộc phiên trong RAM; không bổ sung persistence hay hứa khôi phục dữ liệu sau khi đóng process. Manifest đặt `android:allowBackup="false"` và vẫn tham chiếu hai file rules.
+- `backup_rules.xml` loại trừ chín domain: `root`, `file`, `database`, `sharedpref`, `external`, `device_root`, `device_file`, `device_database`, `device_sharedpref`. Mọi rule đều có `domain` và `path="."`, không có `include`.
+- `data_extraction_rules.xml` áp dụng cùng loại trừ riêng cho cả `cloud-backup` lẫn `device-transfer`. Theo [Android Auto Backup](https://developer.android.com/identity/data/autobackup), một số OEM có thể không tắt chuyển thiết bị chỉ từ `allowBackup=false`; vì vậy cấu hình không bỏ trống phần transfer. Đây là chính sách loại trừ toàn bộ dữ liệu cục bộ của app, gồm cả preferences/file phụ trợ, không chỉ lịch sử đo.
+- Nếu sau này bổ sung lưu lịch sử/cài đặt lâu dài, cần chủ động xem lại chính sách và test. Parse XML không chứng minh Android chấp nhận schema hoặc thiết bị/OEM thực hiện đúng backup/restore.
+
+### 24 test mới đã viết — chưa thực thi
+
+| File | Số ca | Phạm vi assertion | Kết quả chạy |
+| --- | ---: | --- | --- |
+| `MapContentTest.kt` | 18 | Rỗng; query/filter không khớp; giao query và filter; case/whitespace; ngưỡng 90; Work/Free; giữ selection khi đổi thứ tự; selection bị lọc/xóa; snapshot mới cùng ID; demo bật/tắt; tọa độ lỗi; rỗng → có kết quả → rỗng; thông báo; bất biến selection thuộc marker | Chưa chạy |
+| `BackupPolicyTest.kt` | 6 | Manifest opt-out; tham chiếu resource thật; chín domain/path ở cấu hình cũ; đủ hai phần cấu hình mới; loại trừ riêng cloud và transfer | Chưa chạy |
+
+Test bản đồ dùng dữ liệu giả. Test backup đọc trực tiếp manifest/XML của project bằng parser JVM, không dùng bản XML chép vào fixture và không gọi Android backup. Gradle truyền `wlo.projectRoot`, khai báo ba XML là input để thay đổi cấu hình làm task test chạy lại. Những thiết lập Gradle này cũng **chưa được thực thi**.
+
+Rà soát tĩnh đã thực hiện:
+
+- `git -c core.safecrlf=false diff --check`: exit **0**, không có lỗi whitespace.
+- Parser XML .NET đọc được ba file nguồn: manifest có root `manifest`; rules cũ có root `full-backup-content` và **9 exclude**; rules mới có root `data-extraction-rules` và **18 exclude**. Số rule thiếu `domain`/`path`: **0**. Đây chỉ là kiểm tra văn bản XML well-formed, không phải Android lint/JUnit.
+- Đếm từ source: **18 + 6 = 24** test mới, tổng **257 hồi quy + 33 cũ = 290** khai báo. Không coi số khai báo là số test đã chạy hoặc Gradle đã discover.
+- Đối chiếu `WifiMapScreen` dùng `content.places` để vẽ marker và `content.selectedPlace` cho toàn bộ thẻ/nút chi tiết; effect camera bỏ qua null. Chưa có kiểm thử Compose/UI hoặc camera trên thiết bị.
+
+Không chạy Gradle, JUnit, build, lint, app, emulator, ADB, backup/restore hoặc probe mạng trên máy người dùng. Phiên này chưa có runner độc lập; **không có kết quả Pass/Fail runtime, log Gradle hay JUnit XML**.
+
+### Đổi thông điệp bảy commit cũ
+
+Theo yêu cầu, bỏ scope chứa BUG khỏi thông điệp, dùng `fix: ...`. Bảy cặp commit đã đối chiếu **tree hash bằng nhau**; giữ nội dung file, cách chia nhóm, author/committer, thời gian và body. Hash commit thay đổi vì subject/parent thay đổi. Base vẫn là `9165eb2`; không push hoặc force-push.
+
+| Hash cũ | Hash mới | Subject mới |
+| --- | --- | --- |
+| `d463711` | `40ec001` | `fix: preserve measured data and result identity` |
+| `8bf0c3b` | `6fccc6d` | `fix: own history and cancel network-bound benchmarks` |
+| `db771a7` | `dea9265` | `fix: unify readiness, permissions and location data` |
+| `dd613ff` | `ba91da0` | `fix: manage radar lifecycle and bounded recovery` |
+| `433cc74` | `660fcb3` | `fix: bound benchmark duration and penalize TCP failures` |
+| `df3fb19` | `84d05c0` | `fix: own location requests and derive saved collection` |
+| `96b6e01` | `d2df684` | `fix: share selected need and scope score comparisons` |
+
+`git log --all --format='%s' --grep='BUG' --regexp-ignore-case` không trả về commit nào sau khi đổi. Đây là kiểm tra lịch sử reachable tại local; không xác nhận trạng thái remote mới nhất. Commit sửa BUG-18–19 được tạo sau `d2df684` với subject không chứa số BUG.
 
 ## Thay đổi và kiểm tra BUG-16–17
 
@@ -242,8 +293,10 @@ Thư mục `tests/src/test/kotlin/com/mobilelegend/wlo/regression/` đã đượ
 | [HomeRecommendationsTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/HomeRecommendationsTest.kt) | 12 | Lọc/xếp hạng đúng nhu cầu, top 3/tìm kiếm, snapshot và điểm gần nhất | Chưa chạy |
 | [SelectedNeedFlowTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/SelectedNeedFlowTest.kt) | 11 | Một lựa chọn chung, đo/retry, ViewModelStore, category bất biến và hành động lịch sử | Chưa chạy |
 | [HistoryComparisonTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/HistoryComparisonTest.kt) | 13 | Nhóm nhu cầu, bookmark, đồng điểm, xóa và metadata lúc đo | Chưa chạy |
+| [MapContentTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/MapContentTest.kt) | 18 | Rỗng/tìm kiếm/bộ lọc, selection, snapshot, demo và tọa độ | Chưa chạy |
+| [BackupPolicyTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/BackupPolicyTest.kt) | 6 | Manifest và XML backup thật, domain/path, cloud và transfer | Chưa chạy |
 
-233 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
+257 test hồi quy dùng dữ liệu giả hoặc đọc XML nguồn và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
 
 Các test cũ đã được cập nhật ở mức source: assertion nhãn LinkSpeed, repository giả dùng API phiên đo và fixture lịch sử có timestamp cố định. Hai test `PingTesterTest` cũ vẫn có kết nối mạng thật.
 
@@ -311,11 +364,16 @@ bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.SelectedNeedFlowTest' \
   --tests 'com.mobilelegend.wlo.regression.HistoryComparisonTest'
 
-# Chạy toàn bộ 233 test hồi quy BUG-01–17.
+# BUG-18–19: 24 ca mới, dữ liệu bản đồ giả và XML nguồn của project.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.MapContentTest' \
+  --tests 'com.mobilelegend.wlo.regression.BackupPolicyTest'
+
+# Chạy toàn bộ 257 test hồi quy BUG-01–19.
 bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.*'
 
-# Toàn bộ 266 khai báo test, bao gồm hai test socket thật cũ.
+# Toàn bộ 290 khai báo test, bao gồm hai test socket thật cũ.
 bash ./gradlew --no-daemon :app:testDebugUnitTest
 
 # Biên dịch APK và kiểm tra Android lint.
@@ -370,6 +428,9 @@ Nếu dừng ở dependency/SDK/biên dịch, ghi đúng giai đoạn; không gh
 | Có nhiều nhu cầu, tìm kiếm/top 3, nhu cầu chưa có phép đo; chọn Work rồi Relax | Danh sách/rank và thẻ điểm đúng category; rỗng không fallback; Work/Relax dùng chung thang điểm có giải thích | Chưa chạy |
 | Lịch sử gồm nhiều category, đồng điểm/điểm 0, bỏ bookmark/xóa điểm cao nhất | Chỉ so sánh trong nhóm và trong tập bookmark; cập nhật nhãn/đồng điểm; không nâng điểm 0 | Chưa chạy |
 | Tên địa điểm/SSID dài, font lớn, nhiều nhóm lịch sử và đổi múi giờ | Nhãn phạm vi/nhu cầu/mạng/thời gian đọc được, không đè nút xóa; timestamp gốc giữ nguyên | Chưa chạy |
+| Bản đồ rỗng, từ khóa không tồn tại, lọc không khớp; sau đó xóa từ khóa/đổi về Tất cả | Không có marker Wi-Fi/thẻ/nút chi tiết khi rỗng; kết quả và lựa chọn trở lại đúng bộ lọc | Chưa chạy |
+| Chọn điểm rồi đổi query/filter, xóa điểm hoặc tắt demo; MapView khởi tạo chậm | Không giữ chi tiết điểm đã ẩn; camera focus điểm hợp lệ khi map sẵn sàng; nút GPS vẫn chờ đúng request | Chưa chạy |
+| Android API 26–30 và 31–34 trên thiết bị/runner riêng: lint, backup/restore, chuyển thiết bị | XML được Android chấp nhận; không sao lưu/khôi phục dữ liệu app theo policy; ghi rõ OEM/transport | Chưa chạy |
 
 Ghi thiết bị, Android API, thao tác, network/SSID/BSSID trước và sau, số bản ghi và log quan sát được khi thực hiện từng ca. Chỉ đánh dấu Pass/Fail khi đã chạy thật.
 

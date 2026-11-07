@@ -62,9 +62,7 @@ import com.mobilelegend.wlo.data.sensor.LocationRequestState
 import com.mobilelegend.wlo.data.sensor.LocationRequestStatus
 import com.mobilelegend.wlo.data.sensor.DEFAULT_MAP_LAT
 import com.mobilelegend.wlo.data.sensor.DEFAULT_MAP_LON
-import com.mobilelegend.wlo.presentation.components.visibleMapPlaces
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
-import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.linkSpeedText
 import com.mobilelegend.wlo.presentation.components.pingText
@@ -84,13 +82,6 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
-private enum class MapFilterChip(val label: String) {
-    ALL("Tất cả"),
-    EXCELLENT("Rất tốt"),
-    WORK("Làm việc"),
-    FREE("Miễn phí")
-}
-
 @Composable
 fun WifiMapScreen(
     places: List<WifiPlaceItem>,
@@ -103,7 +94,7 @@ fun WifiMapScreen(
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(MapFilterChip.ALL) }
-    var selectedPlaceId by remember { mutableStateOf(places.firstOrNull()?.id ?: "workshop_coffee") }
+    var selectedPlaceId by remember { mutableStateOf<String?>(null) }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var showDemo by remember { mutableStateOf(false) }
     var pendingLocationFocus by remember { mutableStateOf<Long?>(null) }
@@ -114,26 +105,15 @@ fun WifiMapScreen(
         onRefreshUserLocation()
     }
 
-    val filteredPlaces = remember(places, searchQuery, selectedFilter, showDemo) {
-        visibleMapPlaces(places, showDemo).filter { place ->
-            val matchesQuery = searchQuery.isBlank() ||
-                place.name.contains(searchQuery, ignoreCase = true) ||
-                place.district.contains(searchQuery, ignoreCase = true)
-            val matchesFilter = when (selectedFilter) {
-                MapFilterChip.ALL -> true
-                MapFilterChip.EXCELLENT -> place.score >= 90
-                MapFilterChip.WORK -> place.suitableNeeds.contains(WifiNeedOption.WORK)
-                MapFilterChip.FREE -> place.isFree
-            }
-            matchesQuery && matchesFilter
-        }
+    val content = remember(places, searchQuery, selectedFilter, showDemo, selectedPlaceId) {
+        mapContent(places, searchQuery, selectedFilter, showDemo, selectedPlaceId)
     }
-
-    val selectedPlace = filteredPlaces.find { it.id == selectedPlaceId }
-        ?: filteredPlaces.firstOrNull()
+    val filteredPlaces = content.places
+    val selectedPlace = content.selectedPlace
 
     // Tự động bay camera khi đổi địa điểm được chọn
-    LaunchedEffect(selectedPlace?.id) {
+    LaunchedEffect(selectedPlace?.id, selectedPlace?.latitude, selectedPlace?.longitude, mapViewRef) {
+        selectedPlaceId = selectedPlace?.id
         selectedPlace?.let { mapViewRef?.controller?.animateTo(GeoPoint(it.latitude, it.longitude), 16.6, 550L) }
     }
     LaunchedEffect(pendingLocationFocus, locationRequest, userLocation, mapViewRef) {
@@ -428,11 +408,13 @@ fun WifiMapScreen(
             }
 
             // Thẻ thông tin địa điểm nổi dưới đáy bản đồ
-            if (selectedPlace == null) Text(
-                "Chưa có điểm đo phù hợp. Đo Wi-Fi tại vị trí của bạn hoặc bật dữ liệu minh họa.",
-                modifier = Modifier.align(Alignment.BottomCenter).background(SurfaceWhite).padding(16.dp),
-                color = TextSecondary, fontSize = 13.sp
-            )
+            content.emptyMessage?.let { message ->
+                Text(
+                    message,
+                    modifier = Modifier.align(Alignment.BottomCenter).background(SurfaceWhite).padding(16.dp),
+                    color = TextSecondary, fontSize = 13.sp
+                )
+            }
             if (selectedPlace != null) Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
