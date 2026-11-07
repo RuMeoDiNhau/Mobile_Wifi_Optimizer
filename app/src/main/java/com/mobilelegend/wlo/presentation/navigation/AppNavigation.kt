@@ -58,7 +58,7 @@ fun AppNavigation(
     onOpenWifiSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current.applicationContext
     val locationProvider = remember(context) {
         DeviceLocationProvider(context, PermissionHelper(context))
     }
@@ -67,6 +67,7 @@ fun AppNavigation(
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
 
     var userLocation by remember { mutableStateOf(locationProvider.getCurrentLocation()) }
+    val locationRequest by locationProvider.requestState.collectAsStateWithLifecycle()
     var demoPlaces by remember { mutableStateOf(DefaultWifiPlaces) }
     var selectedNeed by remember { mutableStateOf(WifiNeedOption.WORK) }
     var inspectedPlace by remember { mutableStateOf<WifiPlaceItem?>(null) }
@@ -118,7 +119,7 @@ fun AppNavigation(
         )
     }
 
-    val refreshUserLocation: () -> Unit = {
+    val refreshUserLocation: () -> Long? = {
         locationProvider.requestSingleUpdate { latestCoord ->
             userLocation = latestCoord
         }
@@ -127,6 +128,7 @@ fun AppNavigation(
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(locationProvider, lifecycleOwner, radarState.wifiAccess) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            locationProvider.setForeground(true)
             try {
                 refreshUserLocation()
                 while (isActive) {
@@ -134,11 +136,11 @@ fun AppNavigation(
                     delay(1000L)
                 }
             } finally {
-                locationProvider.cancelLocationUpdate()
+                locationProvider.setForeground(false)
             }
         }
     }
-    DisposableEffect(locationProvider) { onDispose { locationProvider.cancelLocationUpdate() } }
+    DisposableEffect(locationProvider) { onDispose { locationProvider.setForeground(false) } }
 
     val navigateToTab: (Screen) -> Unit = { targetScreen ->
         navController.navigate(targetScreen.route) {
@@ -203,6 +205,7 @@ fun AppNavigation(
                 WifiMapScreen(
                     places = places,
                     userLocation = userLocation,
+                    locationRequest = locationRequest,
                     onRefreshUserLocation = refreshUserLocation,
                     onInspectPlace = { place ->
                         inspectedPlace = place
@@ -227,9 +230,9 @@ fun AppNavigation(
             // Tab 4: Địa điểm đã lưu (anh4.png)
             composable(Screen.SavedPlaces.route) {
                 SavedPlacesScreen(
-                    places = places,
                     sessionSpots = measureState.savedSpots,
-                    onToggleSavePlace = toggleSavePlace,
+                    userLocation = userLocation,
+                    onToggleSavedSpot = measureViewModel::toggleSpotSaved,
                     onRemoveSessionSpot = { spotId ->
                         measureViewModel.removeSpotFromHistory(spotId)
                     },

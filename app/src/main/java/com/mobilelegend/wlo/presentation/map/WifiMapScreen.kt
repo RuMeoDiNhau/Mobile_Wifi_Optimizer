@@ -58,10 +58,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mobilelegend.wlo.data.sensor.UserGeoCoordinate
+import com.mobilelegend.wlo.data.sensor.LocationRequestState
+import com.mobilelegend.wlo.data.sensor.LocationRequestStatus
 import com.mobilelegend.wlo.data.sensor.DEFAULT_MAP_LAT
 import com.mobilelegend.wlo.data.sensor.DEFAULT_MAP_LON
 import com.mobilelegend.wlo.presentation.components.visibleMapPlaces
-import kotlinx.coroutines.delay
 import com.mobilelegend.wlo.presentation.components.AppTopHeader
 import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
@@ -94,7 +95,8 @@ private enum class MapFilterChip(val label: String) {
 fun WifiMapScreen(
     places: List<WifiPlaceItem>,
     userLocation: UserGeoCoordinate,
-    onRefreshUserLocation: () -> Unit,
+    locationRequest: LocationRequestState,
+    onRefreshUserLocation: () -> Long?,
     onInspectPlace: (WifiPlaceItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -104,7 +106,7 @@ fun WifiMapScreen(
     var selectedPlaceId by remember { mutableStateOf(places.firstOrNull()?.id ?: "workshop_coffee") }
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var showDemo by remember { mutableStateOf(false) }
-    var pendingLocationFocus by remember { mutableStateOf(false) }
+    var pendingLocationFocus by remember { mutableStateOf<Long?>(null) }
 
     // Khởi tạo cấu hình User-Agent cho OSMdroid
     LaunchedEffect(Unit) {
@@ -134,15 +136,19 @@ fun WifiMapScreen(
     LaunchedEffect(selectedPlace?.id) {
         selectedPlace?.let { mapViewRef?.controller?.animateTo(GeoPoint(it.latitude, it.longitude), 16.6, 550L) }
     }
-    LaunchedEffect(pendingLocationFocus, userLocation, mapViewRef) {
+    LaunchedEffect(pendingLocationFocus, locationRequest, userLocation, mapViewRef) {
         val mapView = mapViewRef
-        if (pendingLocationFocus && userLocation.isRealFix && mapView != null) {
-            mapView.controller.animateTo(GeoPoint(userLocation.latitude, userLocation.longitude), 16.8, 650L)
-            pendingLocationFocus = false
+        val requestedId = pendingLocationFocus ?: return@LaunchedEffect
+        if (locationRequest.id < requestedId) return@LaunchedEffect
+        if (locationRequest.id == requestedId && locationRequest.status == LocationRequestStatus.REQUESTING) {
+            return@LaunchedEffect
         }
-    }
-    LaunchedEffect(pendingLocationFocus) {
-        if (pendingLocationFocus) { delay(10_500L); pendingLocationFocus = false }
+        if (locationRequest.id == requestedId && locationRequest.status == LocationRequestStatus.UPDATED &&
+            userLocation.isRealFix) {
+            if (mapView == null) return@LaunchedEffect
+            mapView.controller.animateTo(GeoPoint(userLocation.latitude, userLocation.longitude), 16.8, 650L)
+        }
+        pendingLocationFocus = null
     }
 
     DisposableEffect(Unit) {
@@ -165,6 +171,7 @@ fun WifiMapScreen(
             title = "Bản đồ Wi-Fi"
         )
         Text(userLocation.statusText, fontSize = 12.sp, color = TextSecondary)
+        Text(locationRequest.status.message, fontSize = 12.sp, color = TextSecondary)
         Text(
             if (showDemo) "Đang xem dữ liệu minh họa · Ẩn" else "Hiện dữ liệu minh họa",
             modifier = Modifier.clickable { showDemo = !showDemo }.padding(vertical = 6.dp),
@@ -404,8 +411,7 @@ fun WifiMapScreen(
                     .padding(14.dp)
                     .size(42.dp)
                     .clickable {
-                        pendingLocationFocus = true
-                        onRefreshUserLocation()
+                        pendingLocationFocus = onRefreshUserLocation()
                     },
                 shape = RoundedCornerShape(14.dp),
                 color = SurfaceWhite,

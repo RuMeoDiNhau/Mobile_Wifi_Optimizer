@@ -1,4 +1,4 @@
-# Kiểm thử BUG-01 đến BUG-13
+# Kiểm thử BUG-01 đến BUG-15
 
 Ngày ghi nhận: **07/11/2026** (Asia/Saigon).
 
@@ -17,11 +17,40 @@ Không có kết quả `BUILD SUCCESSFUL`, JUnit XML hoặc ảnh chạy ứng d
 | BUG-07–09 | Thêm 31 test trong 3 file; cập nhật fixture quyền/readiness và dữ liệu vị trí |
 | BUG-10–11 | Thêm 30 test trong `LiveRadarLifecycleTest.kt`; cập nhật fixture mẫu Wi-Fi |
 | BUG-12–13 | Thêm 26 test: 13 deadline/tiến trình, 12 TCP/scoring, 1 socket giả bị đóng khi timeout |
-| Toàn bộ test hồi quy trong `tests/` | **152 phương thức `@Test`, 0 đã thực thi** |
+| BUG-14–15 | Thêm 45 test: 25 quản lý yêu cầu vị trí, 8 chọn/đánh giá mẫu và 12 danh sách Đã lưu |
+| Toàn bộ test hồi quy trong `tests/` | **197 phương thức `@Test`, 0 đã thực thi** |
 | Test có sẵn trong `app/src/test/` | **33 phương thức `@Test`, chưa chạy lại** |
-| Tổng số khai báo test | **185**, đếm từ source; chưa xác nhận Gradle discover |
+| Tổng số khai báo test | **230**, đếm từ source; chưa xác nhận Gradle discover |
 | Build / assemble / lint / unit test / UI test | **Chưa chạy** |
 | Wi-Fi, quyền Android, GPS, Back/tab/background thật | **Chưa kiểm chứng trên runtime** |
+
+## Thay đổi và kiểm tra BUG-14–15
+
+### BUG-14: một yêu cầu vị trí, tuổi dữ liệu và vòng đời
+
+- Tách `LocationRequestController` khỏi adapter Android để kiểm tra bằng nguồn vị trí/đồng hồ/deadline giả. Mỗi lượt có ID riêng, một listener và hạn chờ 10.000 ms. Lượt mới hủy lượt trước; callback hoặc timeout cũ không được hoàn tất lượt mới. Nhận fix hợp lệ, timeout, lỗi đăng ký, provider bị tắt hoặc hủy đều đi qua cleanup.
+- Navigation cho phép yêu cầu khi lifecycle STARTED, dừng và hủy khi xuống nền/dispose; thay đổi quyền khởi động lại vòng theo dõi. Provider và PermissionHelper giữ application context. Callback đến ngay trong lúc đăng ký được hoãn hoàn tất đến khi có handle để cleanup; request/cancel gọi lại trong callback hoặc cleanup không ghi đè lượt mới.
+- Đánh giá tất cả mẫu last-known và mẫu vừa nhận: ưu tiên mẫu dùng được, sau đó mới nhất, dùng accuracy khi cùng timestamp. Mẫu mock/sai/timestamp tương lai không che mất mẫu thật còn mới. Callback không hợp lệ tiếp tục chờ đến khi có fix hợp lệ hoặc hết hạn. Tuổi tính lại từ monotonic timestamp trên mỗi lần đọc; tối đa 120 giây, Coarse hoặc sai số trên 100 m được ghi gần đúng. Mountain View thật vẫn giữ nguyên.
+- Bản đồ hiện tuổi/độ chính xác cùng trạng thái đang chờ, đã cập nhật, timeout, unavailable, lỗi hoặc hủy. Cache còn hiệu lực không được coi là một lần cập nhật thành công. Nút định vị chờ đúng ID hoàn tất với fix hợp lệ rồi mới đưa camera về vị trí; bỏ timer UI 10,5 giây riêng.
+- Hạn chờ dùng Handler trên main looper, không phải cam kết callback đúng thời điểm khi main thread bị chặn. Việc gỡ listener trên Android thật và rendering Compose vẫn cần kiểm thử tích hợp.
+
+### BUG-15: danh sách rỗng và thống kê từ lịch sử thật
+
+- Giữ việc bỏ fallback đã thực hiện ở BUG-09; bổ sung `savedPlacesContent` lấy danh sách và số lượng trực tiếp từ cùng snapshot lịch sử ViewModel. Bỏ lưu toàn bộ cho danh sách rỗng; lưu lại một bản ghi cho đúng một dòng. Không có đầu vào demo hay danh sách thay thế.
+- Bỏ số cố định “3 khu vực”. Ba thống kê là số địa điểm đã lưu có tọa độ dùng được, tổng lượt đo trong phiên và số kết quả đã lưu thiếu vị trí hợp lệ. Bỏ bookmark không xóa lịch sử, nên tổng lượt đo vẫn giữ; xóa bản ghi mới giảm tổng.
+- Kết quả thiếu GPS vẫn xem được trong Lịch sử đo mạng và có thông báo riêng. Toggle dùng ID phép đo; đổi tên/bookmark không đổi snapshot, SSID, thời điểm, tọa độ hoặc số liệu.
+
+### 45 test mới đã viết — chưa chạy
+
+| File | Số ca | Tình huống được mô tả bằng assertion | Kết quả chạy |
+| --- | ---: | --- | --- |
+| `LocationRequestControllerTest.kt` | 25 | Không fix/timeout; cache mới/cũ; hủy/lặp refresh/background; callback/timer muộn; callback đồng bộ trong đăng ký; lỗi đăng ký/deadline/quyền; provider tắt; invalid/mock/stale; cache già đi; Coarse; request/cancel gọi lại trong callback/cleanup | Chưa chạy |
+| `LocationSampleSelectionTest.kt` | 8 | Mới nhất trong mẫu dùng được; mock/invalid/future không che mẫu tốt; accuracy khi cùng tuổi; stale/rỗng; monotonic không phụ thuộc giờ hệ thống; timestamp lỗi; ranh giới 120 giây/100 m; Mountain View thật | Chưa chạy |
+| `SavedPlacesContentTest.kt` | 12 | Rỗng → nhiều → bỏ lưu hết → lưu một; xóa hết/đo mới; thiếu GPS; số lượng đúng; ID khác nhau cùng SSID/time; di chuyển chỉ đổi khoảng cách; đổi tên/lưu lặp; tọa độ lỗi; ID demo/lạ; giữ snapshot khi lưu lại | Chưa chạy |
+
+Các test mới chỉ dùng fake/manual deadline hoặc `StandardTestDispatcher` và `FakeWifiRepository`; không cần GPS, Wi-Fi, socket hay sleep thật. Test danh sách gọi các hành động đo/bookmark/lưu/xóa của ViewModel rồi kiểm tra projection mà màn hình dùng. Chưa chạy cả những test giả này vì người dùng đã từ chối chạy trên máy của họ; phiên này không có runner độc lập. **Không có Pass/Fail, log Gradle hay JUnit XML.**
+
+Rà soát tĩnh đã thực hiện: `git -c core.safecrlf=false diff --check` exit **0**; đối chiếu chữ ký/call site provider, navigation, bản đồ và Đã lưu; đếm **25 + 8 + 12 = 45** khai báo mới, tổng **197 + 33 = 230**. Không có import trùng trong Kotlin thay đổi/thêm mới hoặc tên test trùng trong ba file mới. Đây là kiểm tra source/Git, **không chứng minh Kotlin biên dịch hay test chạy thành công**.
 
 ## Thay đổi và kiểm tra BUG-12–13
 
@@ -178,8 +207,11 @@ Thư mục `tests/src/test/kotlin/com/mobilelegend/wlo/regression/` đã đượ
 | [LiveRadarLifecycleTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LiveRadarLifecycleTest.kt) | 30 | Foreground, cleanup, ViewModelStore, lỗi/retry, quyền/mạng, dữ liệu hết hạn và kết quả muộn | Chưa chạy |
 | [BenchmarkTimingTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/BenchmarkTimingTest.kt) | 13 | Deadline chung, mạng nhanh/chậm, cancellation/cleanup/kết quả muộn, tiến trình thực | Chưa chạy |
 | [TcpFailureScoringTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/TcpFailureScoringTest.kt) | 12 | Tỷ lệ thất bại, scoring, phạm vi nhận xét, snapshot và batch TCP giả | Chưa chạy |
+| [LocationRequestControllerTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationRequestControllerTest.kt) | 25 | Timeout, cleanup, foreground, callback cũ/đồng bộ, lỗi và request gọi lại | Chưa chạy |
+| [LocationSampleSelectionTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationSampleSelectionTest.kt) | 8 | Chọn mẫu còn hiệu lực, tuổi monotonic, accuracy, mock/invalid, Mountain View | Chưa chạy |
+| [SavedPlacesContentTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/SavedPlacesContentTest.kt) | 12 | Bỏ lưu hết/lưu một, thống kê, thiếu vị trí, xóa/lưu lại và snapshot | Chưa chạy |
 
-152 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
+197 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
 
 Các test cũ đã được cập nhật ở mức source: assertion nhãn LinkSpeed, repository giả dùng API phiên đo và fixture lịch sử có timestamp cố định. Hai test `PingTesterTest` cũ vẫn có kết nối mạng thật.
 
@@ -235,11 +267,17 @@ bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.TcpFailureScoringTest' \
   --tests 'com.mobilelegend.wlo.regression.PingCancellationTest'
 
-# Chạy toàn bộ 152 test hồi quy BUG-01–13.
+# BUG-14–15: 45 ca mới bằng nguồn vị trí/deadline/repository giả.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.LocationRequestControllerTest' \
+  --tests 'com.mobilelegend.wlo.regression.LocationSampleSelectionTest' \
+  --tests 'com.mobilelegend.wlo.regression.SavedPlacesContentTest'
+
+# Chạy toàn bộ 197 test hồi quy BUG-01–15.
 bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.*'
 
-# Toàn bộ 185 khai báo test, bao gồm hai test socket thật cũ.
+# Toàn bộ 230 khai báo test, bao gồm hai test socket thật cũ.
 bash ./gradlew --no-daemon :app:testDebugUnitTest
 
 # Biên dịch APK và kiểm tra Android lint.
@@ -285,11 +323,17 @@ Nếu dừng ở dependency/SDK/biên dịch, ghi đúng giai đoạn; không gh
 | Wi-Fi phản hồi nhanh/chậm, chờ callback hoặc TCP connect kẹt | Không có delay minh họa; deadline 10 giây hủy và dọn tài nguyên; kết quả muộn không được lưu | Chưa chạy |
 | 0/1/2/3 lượt TCP connect thất bại trên cùng mạng | Đúng 0/33/66/100%; chỉ độ trễ thành công được lấy trung bình; có lỗi thì không khuyến nghị tốt | Chưa chạy |
 | Đo có TCP thất bại, lưu rồi xem trên lịch sử/bản đồ | Tỷ lệ và điểm cùng snapshot, không lấy tỷ lệ của mạng hiện tại | Chưa chạy |
+| Trong nhà không có fix, bấm định vị nhiều lần rồi xuống nền/đóng màn | Một listener, timeout/hủy dọn tài nguyên, không nhận callback cũ | Chưa chạy |
+| Cache mới/cũ/mock, timestamp tương lai, chỉ Coarse, Mountain View thật | Hiện đúng tuổi/accuracy/trạng thái; không dùng mẫu không hợp lệ, không loại tọa độ thật | Chưa chạy |
+| Bỏ lưu hết → lưu lại một → xóa hết → đo mới | Số dòng lần lượt 0 → 1 → 0 → 1; tổng lượt đo theo lịch sử | Chưa chạy |
+| Lưu phép đo thiếu GPS, rồi bỏ bookmark/xóa | Không tạo marker giả; thống kê thiếu vị trí và lịch sử cập nhật đúng | Chưa chạy |
 
 Ghi thiết bị, Android API, thao tác, network/SSID/BSSID trước và sau, số bản ghi và log quan sát được khi thực hiện từng ca. Chỉ đánh dấu Pass/Fail khi đã chạy thật.
 
 ## Nguồn API đã đối chiếu
 
+- [Android LocationManager](https://developer.android.com/reference/android/location/LocationManager): overload `requestLocationUpdates` với Looper và `removeUpdates(LocationListener)` dùng được ở min SDK 26; adapter chỉ đăng ký main looper.
+- [Android Location.getElapsedRealtimeNanos](https://developer.android.com/reference/android/location/Location#getElapsedRealtimeNanos()): timestamp theo thời gian từ lúc boot, dùng đánh giá tuổi mẫu thay vì giờ hệ thống.
 - [Kotlin withTimeoutOrNull](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-timeout-or-null.html) và [withContext](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html): timeout hủy hợp tác, kết quả muộn và cleanup. Dùng overload millisecond đã có trong coroutines 1.8.0 của project.
 - [Mã nguồn Timeout.kt tại coroutines 1.8.0](https://github.com/Kotlin/kotlinx.coroutines/blob/1.8.0/kotlinx-coroutines-core/common/src/Timeout.kt): đối chiếu cách phân biệt timeout của chính block với timeout từ caller.
 - [Android ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel) và [lifecycle-aware coroutines](https://developer.android.com/topic/libraries/architecture/coroutines): owner/store và vòng đời coroutine.

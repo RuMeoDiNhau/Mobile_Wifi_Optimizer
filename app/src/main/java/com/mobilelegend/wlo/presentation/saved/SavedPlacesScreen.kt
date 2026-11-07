@@ -52,7 +52,7 @@ import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.linkSpeedText
 import com.mobilelegend.wlo.presentation.components.pingText
 import com.mobilelegend.wlo.presentation.measure_and_result.SavedSpotItem
-import com.mobilelegend.wlo.presentation.components.measuredPlacesOnly
+import com.mobilelegend.wlo.data.sensor.UserGeoCoordinate
 import com.mobilelegend.wlo.presentation.measure_and_result.SessionHistoryBottomSheetContent
 import com.mobilelegend.wlo.presentation.theme.AppBackground
 import com.mobilelegend.wlo.presentation.theme.CardBorder
@@ -68,19 +68,19 @@ import com.mobilelegend.wlo.presentation.theme.ThumbnailMint
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SavedPlacesScreen(
-    places: List<WifiPlaceItem>,
     sessionSpots: List<SavedSpotItem>,
-    onToggleSavePlace: (String) -> Unit,
+    userLocation: UserGeoCoordinate,
+    onToggleSavedSpot: (String) -> Unit,
     onRemoveSessionSpot: (String) -> Unit,
     onOpenMap: () -> Unit,
     onPlaceClick: (WifiPlaceItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val savedPlaces = remember(places) {
-        measuredPlacesOnly(places).filter { it.isSaved }
+    val content = remember(sessionSpots, userLocation) {
+        savedPlacesContent(sessionSpots, userLocation)
     }
-
-    val totalMeasurementsCount = sessionSpots.size
+    val savedPlaces = content.places
+    val totalMeasurementsCount = content.totalMeasurements
     var showHistorySheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
@@ -100,7 +100,7 @@ fun SavedPlacesScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // 2. Hàng 3 Thẻ Thống Kê (2 địa điểm, 12 lượt đo, 3 khu vực)
+        // Counts reflect this history snapshot, including saved results without a usable location.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -131,8 +131,8 @@ fun SavedPlacesScreen(
             }
 
             CollectionStatCard(
-                value = "3",
-                label = "khu vực",
+                value = "${content.savedWithoutLocation}",
+                label = "lưu thiếu vị trí",
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(
@@ -185,12 +185,18 @@ fun SavedPlacesScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (savedPlaces.isEmpty()) Text("Chưa có địa điểm đo được lưu.", color = TextMuted)
+            if (savedPlaces.isEmpty()) Text("Chưa có địa điểm đã lưu có tọa độ hợp lệ.", color = TextMuted)
+            if (content.savedWithoutLocation > 0) Text(
+                "${content.savedWithoutLocation} kết quả đã lưu thiếu vị trí hợp lệ; xem trong Lịch sử đo mạng.",
+                color = TextMuted
+            )
             savedPlaces.forEachIndexed { index, place ->
                 SavedPlaceRowCard(
                     place = place,
                     colorIndex = index,
-                    onToggleSave = { onToggleSavePlace(place.id) },
+                    onToggleSave = {
+                        place.measurement?.measurement?.id?.let(onToggleSavedSpot)
+                    },
                     onClick = { onPlaceClick(place) }
                 )
             }

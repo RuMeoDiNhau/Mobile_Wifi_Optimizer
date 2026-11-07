@@ -14,16 +14,20 @@ data class UserGeoCoordinate(
     val longitude: Double = DEFAULT_MAP_LON,
     val confidence: LocationConfidence = LocationConfidence.UNAVAILABLE,
     val capturedAtMillis: Long? = null,
-    val accuracyMeters: Float? = null
+    val accuracyMeters: Float? = null,
+    val ageMillis: Long? = null
 ) {
     val isRealFix: Boolean get() = validCoordinates(latitude, longitude) &&
         confidence in setOf(LocationConfidence.RECENT, LocationConfidence.APPROXIMATE)
     private val accuracyText: String get() = accuracyMeters?.takeIf { it.isFinite() && it > 0 }
         ?.let { "khoảng ${it.toInt()} m" } ?: "chưa xác định"
+    val ageText: String get() = ageMillis?.takeIf { it >= 0 }?.let {
+        if (it < 1000) "vừa ghi nhận" else "ghi nhận ${it / 1000} giây trước"
+    } ?: "chưa rõ tuổi dữ liệu"
     val statusText: String get() = when (confidence) {
-        LocationConfidence.RECENT -> "Vị trí mới · sai số $accuracyText"
-        LocationConfidence.APPROXIMATE -> "Vị trí gần đúng · sai số $accuracyText"
-        LocationConfidence.STALE -> "Vị trí đã cũ; đang chờ cập nhật"
+        LocationConfidence.RECENT -> "Vị trí còn hiệu lực · $ageText · sai số $accuracyText"
+        LocationConfidence.APPROXIMATE -> "Vị trí gần đúng · $ageText · sai số $accuracyText"
+        LocationConfidence.STALE -> "Vị trí đã cũ; cần cập nhật · $ageText"
         LocationConfidence.MOCK -> "Vị trí mô phỏng; không gắn vào kết quả đo"
         else -> "Chưa xác định vị trí; bản đồ đang dùng tâm mặc định"
     }
@@ -44,5 +48,5 @@ fun assessLocation(
         !precisePermission || accuracyMeters > PRECISE_LOCATION_ACCURACY_METERS -> LocationConfidence.APPROXIMATE
         else -> LocationConfidence.RECENT
     }
-    return UserGeoCoordinate(latitude, longitude, confidence, capturedAtMillis, accuracyMeters)
+    return UserGeoCoordinate(latitude, longitude, confidence, capturedAtMillis, accuracyMeters, ageMillis)
 }
