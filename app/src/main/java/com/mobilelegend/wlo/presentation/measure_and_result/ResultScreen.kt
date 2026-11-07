@@ -56,6 +56,7 @@ import com.mobilelegend.wlo.domain.model.LocationScore
 import com.mobilelegend.wlo.presentation.components.ScoreCircleCard
 import com.mobilelegend.wlo.presentation.components.linkSpeedText
 import com.mobilelegend.wlo.presentation.components.pingText
+import com.mobilelegend.wlo.presentation.components.tcpFailureText
 import com.mobilelegend.wlo.presentation.theme.CardBorder
 import com.mobilelegend.wlo.presentation.theme.DarkBackground
 import com.mobilelegend.wlo.presentation.theme.PrimaryBlue
@@ -186,7 +187,7 @@ fun ResultScreen(
 
         MetricDetailRow(
             icon = Icons.Default.NetworkCheck,
-            title = "Độ trễ Ping ICMP/Socket",
+            title = "Độ trễ TCP (các lượt thành công)",
             rawValue = pingText(score.rawPingMs, score.pingSuccessful),
             normalizedScore = score.normalizedPingScore,
             color = PrimaryBlue
@@ -213,6 +214,8 @@ fun ResultScreen(
         )
 
         Spacer(modifier = Modifier.height(28.dp))
+
+        Text("TCP connect thất bại: ${tcpFailureText(score.tcpFailurePercent)}", color = TextSecondary)
 
         // 5. Actions
         Row(

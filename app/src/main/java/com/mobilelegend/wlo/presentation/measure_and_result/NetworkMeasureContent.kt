@@ -7,6 +7,7 @@ import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.linkSpeedText
 import com.mobilelegend.wlo.presentation.components.networkName
 import com.mobilelegend.wlo.presentation.components.pingText
+import com.mobilelegend.wlo.presentation.components.tcpFailureText
 import com.mobilelegend.wlo.presentation.live_radar.LiveRadarUiState
 
 /** One display source at a time: an inspected place OR the current benchmark. */
@@ -23,7 +24,8 @@ data class NetworkMeasureContent(
     val bssid: String = MISSING_METRIC,
     val measuredAtMillis: Long? = null,
     val category: UseCaseCategory? = null,
-    val progress: Float = 0f
+    val progress: Float = 0f,
+    val tcpFailure: String = MISSING_METRIC
 )
 
 fun measurementBlockReason(radar: LiveRadarUiState): String? = radar.readiness().reason?.message
@@ -111,7 +113,7 @@ private fun measurementContent(score: LocationScore): NetworkMeasureContent {
             else -> score.summaryText
         },
         description = when {
-            score.pingSuccessful == false -> "Không nhận được phản hồi từ đích kiểm tra. Hãy kiểm tra kết nối rồi thử lại."
+            score.pingSuccessful == false -> "Không kết nối được đích TCP. Kết quả này không chứng minh toàn bộ Internet bị mất. Hãy thử lại."
             !hasValidMetrics -> "Chưa đủ thông số hợp lệ để đưa ra khuyến nghị."
             else -> score.recommendation
         },
@@ -124,6 +126,7 @@ private fun measurementContent(score: LocationScore): NetworkMeasureContent {
         score = score.finalScore,
         linkSpeed = linkSpeedText(score.rawLinkSpeedMbps),
         ping = pingText(score.rawPingMs, score.pingSuccessful),
+        tcpFailure = tcpFailureText(score.tcpFailurePercent),
         bssid = context?.bssid?.takeUnless {
             it.isBlank() || it == "00:00:00:00:00:00" || it == "02:00:00:00:00:00"
         } ?: MISSING_METRIC,

@@ -1,4 +1,4 @@
-# Kiểm thử BUG-01 đến BUG-11
+# Kiểm thử BUG-01 đến BUG-13
 
 Ngày ghi nhận: **07/11/2026** (Asia/Saigon).
 
@@ -16,11 +16,43 @@ Không có kết quả `BUILD SUCCESSFUL`, JUnit XML hoặc ảnh chạy ứng d
 | BUG-04–06 | Thêm 36 test trong 3 file; cập nhật các repository giả theo API phiên đo |
 | BUG-07–09 | Thêm 31 test trong 3 file; cập nhật fixture quyền/readiness và dữ liệu vị trí |
 | BUG-10–11 | Thêm 30 test trong `LiveRadarLifecycleTest.kt`; cập nhật fixture mẫu Wi-Fi |
-| Toàn bộ test hồi quy trong `tests/` | **126 phương thức `@Test`, 0 đã thực thi** |
+| BUG-12–13 | Thêm 26 test: 13 deadline/tiến trình, 12 TCP/scoring, 1 socket giả bị đóng khi timeout |
+| Toàn bộ test hồi quy trong `tests/` | **152 phương thức `@Test`, 0 đã thực thi** |
 | Test có sẵn trong `app/src/test/` | **33 phương thức `@Test`, chưa chạy lại** |
-| Tổng số khai báo test | **159**, đếm từ source; chưa xác nhận Gradle discover |
+| Tổng số khai báo test | **185**, đếm từ source; chưa xác nhận Gradle discover |
 | Build / assemble / lint / unit test / UI test | **Chưa chạy** |
 | Wi-Fi, quyền Android, GPS, Back/tab/background thật | **Chưa kiểm chứng trên runtime** |
+
+## Thay đổi và kiểm tra BUG-12–13
+
+### BUG-12: thời hạn và tiến trình thực tế
+
+- Nhãn Radar đổi từ “3s” sang “Đo nhanh mạng Wi-Fi hiện tại”. Đợt trước đã bỏ delay minh họa 2,2 giây; đợt này đặt **hạn tổng 10.000 ms** từ khi use case bắt đầu, bao gồm dispatch, kiểm tra/chờ phiên Wi-Fi, ba lượt TCP connect, chấm điểm và trả kết quả. Timeout mỗi connect vẫn là 2.000 ms; chờ callback Android vẫn tối đa 3.000 ms, cùng nằm trong hạn tổng.
+- Đây là deadline hủy coroutine, **không cam kết màn hình luôn hoàn tất đúng 10 giây**: vẫn phải đợi đóng socket/gỡ callback và cleanup. Không mở lượt mới khi lượt cũ chưa dọn xong, không lưu kết quả đến sau deadline. Không thêm delay cho mạng nhanh.
+- Hết hạn tổng chuyển thành `MeasureStatus.Failed`. Hủy từ người dùng/lifecycle/timeout của caller vẫn là cancellation. `withTimeoutOrNull` chỉ chuyển timeout do chính use case tạo ra.
+- `BenchmarkStage` phát tại các mốc thật: chuẩn bị/chờ mạng, ba TCP connect, kiểm tra và chấm điểm. Các phần trăm là mốc công việc, không phải đồng hồ đếm thời gian.
+
+### BUG-13: tỷ lệ TCP thất bại ảnh hưởng mọi mức điểm
+
+- Đổi `PingResult.packetLossPercent` thành `tcpFailurePercent`; kiểm tra giá trị 0–100 và tính nhất quán với cờ có ít nhất một lượt thành công. Batch giữ cách làm tròn xuống: 1/3 là 33%, 2/3 là 66%. Độ trễ trung bình chỉ lấy các lượt thành công.
+- Điểm mới = **làm tròn(điểm có trọng số × (100 − % TCP thất bại) / 100)**. Với các thông số đạt tối đa, 0%/33%/66%/100% tương ứng **100/67/34/0** điểm. Đây là policy chấm điểm của app, không phải chuẩn đo packet loss.
+- Có bất kỳ TCP thất bại nào đều không khuyến nghị tốt, áp dụng cả ba nhu cầu. Bỏ nhánh cộng cố định 15 điểm khi thất bại; mạng yếu không được nâng điểm bởi nhánh fallback này.
+- Lưu `tcpFailurePercent` trong `LocationScore`; màn đo, màn kết quả, lịch sử và chi tiết điểm đã đo đọc cùng snapshot. Dữ liệu chưa đo/không có tỷ lệ hiển thị `—`, không suy diễn thành 0%.
+- Nội dung đánh giá giới hạn vào đích TCP được thử, bỏ lời hứa về Liên Quân/PUBG/Video HD. Kết nối tới một đích thất bại không đủ chứng minh toàn bộ Internet bị mất. Các test cũ được cập nhật tên trường và assertion theo policy mới; số lượng vẫn là 33.
+
+### Test mới và tình trạng thực thi
+
+| File/nhóm | Số test mới | Kỳ vọng | Trạng thái |
+| --- | ---: | --- | --- |
+| `BenchmarkTimingTest` | 13 | Mạng nhanh/chậm, ba TCP thất bại trong 6 giây vẫn lưu 0 điểm, timeout setup/probe, biên 9.999/10.000 ms, caller/manual cancellation, cleanup chậm, kết quả muộn, tiến trình | Chưa chạy |
+| `TcpFailureScoringTest` | 12 | 0/33/66/100% cho ba nhu cầu, điểm giảm đơn điệu, Wi-Fi yếu, dữ liệu không hợp lệ, giới hạn nhận xét, formatter, offline, snapshot/history/place, batch socket giả | Chưa chạy |
+| Thêm vào `PingCancellationTest` | 1 | Deadline đóng socket đang kẹt; coroutine không trả success hay biến hủy thành kết quả TCP | Chưa chạy |
+
+Hai file mới dùng dữ liệu giả và thời gian ảo. Ca mới của `PingCancellationTest` dùng worker thread/latch với deadline 1 giây và chặn an toàn 3 giây; `Socket.connect` được override nên không có I/O mạng. Phân biệt timeout toàn phép đo (Failed, không lưu) với ba TCP connect thất bại hoàn tất trong hạn (Completed, 0 điểm, 100% thất bại).
+
+**Kết quả thực tế:** mới rà source, chữ ký/API, assertion cũ và whitespace của diff; chưa biên dịch hoặc chạy Kotlin/Gradle. Người dùng đã xác nhận lại không chạy trên máy của họ, kể cả bộ test giả. Không chạy app, Gradle, emulator, ADB, socket probe hay cài dependency. Không có runner độc lập trong phiên này, nên không có kết quả Pass/Fail hoặc JUnit XML để báo cáo.
+
+Rà soát tĩnh BUG-12–13: `git -c core.safecrlf=false diff --check` exit **0**; đếm **152 + 33 = 185** khai báo `@Test`; import trùng trong Kotlin thay đổi/thêm mới: **0**. Tìm `packetLossPercent`, `3s`, `3 giây`, `Rớt gói`, `ICMP/Socket` trong `app/src/main`: không còn kết quả (`rg` exit 1). Các kiểm tra này chỉ đọc source/Git, không thực thi test hay chứng minh biên dịch thành công.
 
 ## Thay đổi và kiểm tra BUG-10–11
 
@@ -88,7 +120,7 @@ Các test dùng `StandardTestDispatcher`, thời gian ảo và repository giả,
 - Mỗi lượt có mã thế hệ; hủy/reset làm lượt cũ mất hiệu lực. `CancellationException` được xử lý riêng; kết quả hoặc lỗi về muộn không đổi UI/history.
 - `PingTester` đóng socket khi coroutine bị hủy và trong `finally`; session đóng socket còn giữ và gỡ callback.
 - Có nút “Hủy phép đo”. Rời màn đo bằng Back/tab, hủy graph hoặc Activity vào `onStop` đều yêu cầu hủy. Không tự bắt đầu lại lượt đo chỉ vì màn cũ được compose lại.
-- Bỏ các delay tiến trình giả; không chờ thêm 800/400 ms sau khi đã kiểm tra tính hợp lệ của kết quả. Chưa đặt cam kết tổng thời gian đúng 3 giây; BUG-12 vẫn cần xử lý riêng.
+- Đợt BUG-04–06 đã bỏ các delay tiến trình giả, không chờ thêm 800/400 ms sau khi kiểm tra kết quả. Hạn tổng 10 giây được bổ sung trong đợt BUG-12 ở phía trên.
 - UI báo đã hủy và khóa lần đo mới trong lúc dọn kết nối. Điều hướng của màn cũ không được đưa người dùng tới kết quả nếu đã rời route đó.
 
 ## Thay đổi BUG-01–03 được giữ lại
@@ -139,13 +171,15 @@ Thư mục `tests/src/test/kotlin/com/mobilelegend/wlo/regression/` đã đượ
 | [MeasuredWifiPlaceTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/MeasuredWifiPlaceTest.kt) | 6 | Formatter, tọa độ/định danh, không bịa điểm bản đồ/tốc độ, SSID/BSSID bị ẩn | Chưa chạy |
 | [MeasurementOwnershipTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/MeasurementOwnershipTest.kt) | 17 | Xem/lưu/xóa/bookmark, snapshot bất biến, bấm liên tục, hủy trước dispatch/trong setup/probe, chờ cleanup, reset và kết quả/lỗi muộn, ViewModelStore, dispatcher chạy ngay | Chưa chạy |
 | [NetworkSessionRegressionTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/NetworkSessionRegressionTest.kt) | 11 | Định danh ẩn, mất/đổi mạng/AP, A→B→A, callback báo mất, kiểm tra trước probing/sau scoring, giữ snapshot và đóng phiên giả | Chưa chạy |
-| [PingCancellationTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/PingCancellationTest.kt) | 8 | Dùng socket factory truyền vào, đóng khi thành công/lỗi/hủy, chặn batch đổi mạng, lỗi binding, hủy ngay trước trả kết quả, số gói không hợp lệ | Chưa chạy |
+| [PingCancellationTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/PingCancellationTest.kt) | 9 | Socket factory, đóng khi thành công/lỗi/hủy/deadline, chặn đổi mạng, lỗi binding, kết quả muộn, số lượt không hợp lệ | Chưa chạy |
 | [WifiReadinessTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/WifiReadinessTest.kt) | 14 | Quyền API 26–34; busy/offline/chờ/ẩn định danh/sensor lỗi; UI và ViewModel cùng lý do; use case kiểm tra lại; thu hồi/cấp lại quyền | Chưa chạy |
 | [WifiSnapshotCacheTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/WifiSnapshotCacheTest.kt) | 5 | Cache theo network ID, đổi mạng, callback mất mạng cũ, đăng ký cũ sau thay quyền và mẫu redacted | Chưa chạy |
 | [LocationDataPolicyTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationDataPolicyTest.kt) | 12 | Tâm mặc định, metadata, gần đúng/cũ/mock/invalid, Mountain View thật, không kéo demo, lọc demo, khoảng cách và hai lượt A/B | Chưa chạy |
 | [LiveRadarLifecycleTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LiveRadarLifecycleTest.kt) | 30 | Foreground, cleanup, ViewModelStore, lỗi/retry, quyền/mạng, dữ liệu hết hạn và kết quả muộn | Chưa chạy |
+| [BenchmarkTimingTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/BenchmarkTimingTest.kt) | 13 | Deadline chung, mạng nhanh/chậm, cancellation/cleanup/kết quả muộn, tiến trình thực | Chưa chạy |
+| [TcpFailureScoringTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/TcpFailureScoringTest.kt) | 12 | Tỷ lệ thất bại, scoring, phạm vi nhận xét, snapshot và batch TCP giả | Chưa chạy |
 
-126 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; một ca dùng worker thread và latch có timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
+152 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
 
 Các test cũ đã được cập nhật ở mức source: assertion nhãn LinkSpeed, repository giả dùng API phiên đo và fixture lịch sử có timestamp cố định. Hai test `PingTesterTest` cũ vẫn có kết nối mạng thật.
 
@@ -195,11 +229,17 @@ bash ./gradlew --no-daemon :app:testDebugUnitTest \
 bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.LiveRadarLifecycleTest'
 
-# Chạy toàn bộ 126 test hồi quy BUG-01–11.
+# BUG-12–13: hai file mới + toàn bộ 9 ca đóng socket (34 ca).
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.BenchmarkTimingTest' \
+  --tests 'com.mobilelegend.wlo.regression.TcpFailureScoringTest' \
+  --tests 'com.mobilelegend.wlo.regression.PingCancellationTest'
+
+# Chạy toàn bộ 152 test hồi quy BUG-01–13.
 bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.*'
 
-# Toàn bộ 159 khai báo test, bao gồm hai test socket thật cũ.
+# Toàn bộ 185 khai báo test, bao gồm hai test socket thật cũ.
 bash ./gradlew --no-daemon :app:testDebugUnitTest
 
 # Biên dịch APK và kiểm tra Android lint.
@@ -242,11 +282,16 @@ Nếu dừng ở dependency/SDK/biên dịch, ghi đúng giai đoạn; không gh
 | Nguồn Radar ném lỗi/hoàn tất/im lặng, bấm thử lại liên tục | Báo lỗi, ẩn mẫu hết hạn, retry hữu hạn, không có hai collector | Chưa chạy |
 | Từ chối đăng ký callback rồi cấp lại quyền/quay về từ Settings | Không đăng ký lặp vô hạn khi bị từ chối; khôi phục sau thay đổi/refresh | Chưa chạy |
 | Đóng hẳn Activity khi Radar hoặc retry đang chạy | ViewModelStore clear dọn nguồn và job; mở lại không còn callback của owner cũ | Chưa chạy |
+| Wi-Fi phản hồi nhanh/chậm, chờ callback hoặc TCP connect kẹt | Không có delay minh họa; deadline 10 giây hủy và dọn tài nguyên; kết quả muộn không được lưu | Chưa chạy |
+| 0/1/2/3 lượt TCP connect thất bại trên cùng mạng | Đúng 0/33/66/100%; chỉ độ trễ thành công được lấy trung bình; có lỗi thì không khuyến nghị tốt | Chưa chạy |
+| Đo có TCP thất bại, lưu rồi xem trên lịch sử/bản đồ | Tỷ lệ và điểm cùng snapshot, không lấy tỷ lệ của mạng hiện tại | Chưa chạy |
 
 Ghi thiết bị, Android API, thao tác, network/SSID/BSSID trước và sau, số bản ghi và log quan sát được khi thực hiện từng ca. Chỉ đánh dấu Pass/Fail khi đã chạy thật.
 
 ## Nguồn API đã đối chiếu
 
+- [Kotlin withTimeoutOrNull](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-timeout-or-null.html) và [withContext](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/with-context.html): timeout hủy hợp tác, kết quả muộn và cleanup. Dùng overload millisecond đã có trong coroutines 1.8.0 của project.
+- [Mã nguồn Timeout.kt tại coroutines 1.8.0](https://github.com/Kotlin/kotlinx.coroutines/blob/1.8.0/kotlinx-coroutines-core/common/src/Timeout.kt): đối chiếu cách phân biệt timeout của chính block với timeout từ caller.
 - [Android ViewModel](https://developer.android.com/topic/libraries/architecture/viewmodel) và [lifecycle-aware coroutines](https://developer.android.com/topic/libraries/architecture/coroutines): owner/store và vòng đời coroutine.
 - [Kotlin collectLatest](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.flow/collect-latest.html): hủy xử lý giá trị trước khi yêu cầu mới đến.
 - [Android NetworkCallback](https://developer.android.com/reference/android/net/ConnectivityManager.NetworkCallback): vòng đời callback, cờ thông tin vị trí từ API 31 và dữ liệu callback.

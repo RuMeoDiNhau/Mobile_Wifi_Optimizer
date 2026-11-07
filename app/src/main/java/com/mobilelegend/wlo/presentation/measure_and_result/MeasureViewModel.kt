@@ -3,6 +3,7 @@ package com.mobilelegend.wlo.presentation.measure_and_result
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilelegend.wlo.domain.model.LocationScore
+import com.mobilelegend.wlo.domain.model.BenchmarkStage
 import com.mobilelegend.wlo.domain.model.MeasurementLocation
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.usecase.PerformBenchmarkUseCase
@@ -41,7 +42,13 @@ class MeasureViewModel(
             // Assign ownership before execution, including with an immediate Main dispatcher.
             val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
                 try {
-                    val score = performBenchmarkUseCase(category, location)
+                    val score = performBenchmarkUseCase(category, location) { stage ->
+                        synchronized(lock) {
+                            if (runId == generation && benchmarkJob?.isActive == true) {
+                                _uiState.update { it.copy(status = MeasureStatus.Measuring(stage.progress, stage.message)) }
+                            }
+                        }
+                    }
                     currentCoroutineContext().ensureActive()
                     synchronized(lock) {
                         if (runId == generation && benchmarkJob?.isActive == true) {
@@ -75,7 +82,7 @@ class MeasureViewModel(
                 it.copy(
                     selectedCategory = category,
                     isBenchmarkRunning = true,
-                    status = MeasureStatus.Measuring(0.5f, "Đang kiểm tra Wi-Fi và đo độ trễ TCP...")
+                    status = MeasureStatus.Measuring(BenchmarkStage.PREPARING.progress, BenchmarkStage.PREPARING.message)
                 )
             }
             // Also runs when cancelled before the lazy coroutine body ever starts.

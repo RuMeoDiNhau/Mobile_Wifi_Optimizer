@@ -68,40 +68,38 @@ class CalculateScoreUseCase {
             )
         }
 
-        if (!pingResult.isSuccess || pingResult.packetLossPercent >= 50) {
-            return LocationScore(
-                finalScore = 15,
-                normalizedRssiScore = normalizeRssi(wifiMetric.rssi),
-                normalizedPingScore = 0,
-                normalizedSpeedScore = normalizeLinkSpeed(wifiMetric.linkSpeedMbps),
-                category = category,
-                summaryText = "Mạng mất tín hiệu Internet / Rớt gói",
-                recommendation = "Đường truyền bị gián đoạn (Rớt gói ${pingResult.packetLossPercent}%). Hãy kiểm tra router hoặc di chuyển lại gần hơn.",
-                isRecommended = false,
-                rawRssi = wifiMetric.rssi,
-                rawPingMs = pingResult.latencyMs,
-                rawLinkSpeedMbps = wifiMetric.linkSpeedMbps,
-                pingSuccessful = pingResult.isSuccess
-            )
-        }
-
         val sRssi = normalizeRssi(wifiMetric.rssi)
-        val sPing = normalizePing(pingResult.latencyMs)
+        val sPing = if (pingResult.isSuccess) normalizePing(pingResult.latencyMs) else 0
         val sSpeed = normalizeLinkSpeed(wifiMetric.linkSpeedMbps)
 
         val weight = UseCaseWeight.getWeightFor(category)
         val rawFinalScore = (sRssi * weight.rssiWeight) +
                 (sPing * weight.pingWeight) +
                 (sSpeed * weight.speedWeight)
-        val finalScore = rawFinalScore.roundToInt().coerceIn(0, 100)
+        // Penalize every failed TCP attempt, including 1/3 failures. This is an app
+        // scoring policy, not a measurement of IP packet loss or application throughput.
+        val finalScore = (rawFinalScore * (100 - pingResult.tcpFailurePercent) / 100f)
+            .roundToInt().coerceIn(0, 100)
 
-        val (summary, recommendation, isRecommended) = generateEvaluation(
-            category = category,
-            finalScore = finalScore,
-            rssi = wifiMetric.rssi,
-            pingMs = pingResult.latencyMs,
-            linkSpeedMbps = wifiMetric.linkSpeedMbps
-        )
+        val (summary, recommendation, isRecommended) = when {
+            !pingResult.isSuccess -> Triple(
+                "Không kết nối được đích TCP",
+                "100% lượt TCP connect thất bại. Chưa đủ dữ liệu để kết luận toàn bộ Internet bị mất. Hãy thử lại hoặc kiểm tra kết nối.",
+                false
+            )
+            pingResult.tcpFailurePercent > 0 -> Triple(
+                "Kết nối TCP chưa ổn định",
+                "${pingResult.tcpFailurePercent}% lượt TCP connect thất bại; độ trễ ${pingResult.latencyMs} ms chỉ tính các lượt thành công. Chưa khuyến nghị cho nhu cầu này; hãy thử lại.",
+                false
+            )
+            else -> generateEvaluation(
+                category = category,
+                finalScore = finalScore,
+                rssi = wifiMetric.rssi,
+                pingMs = pingResult.latencyMs,
+                linkSpeedMbps = wifiMetric.linkSpeedMbps
+            )
+        }
 
         return LocationScore(
             finalScore = finalScore,
@@ -110,12 +108,13 @@ class CalculateScoreUseCase {
             normalizedSpeedScore = sSpeed,
             category = category,
             summaryText = summary,
-            recommendation = recommendation,
+            recommendation = "$recommendation $TCP_MEASUREMENT_SCOPE",
             isRecommended = isRecommended,
             rawRssi = wifiMetric.rssi,
             rawPingMs = pingResult.latencyMs,
             rawLinkSpeedMbps = wifiMetric.linkSpeedMbps,
-            pingSuccessful = pingResult.isSuccess
+            pingSuccessful = pingResult.isSuccess,
+            tcpFailurePercent = pingResult.tcpFailurePercent
         )
     }
 
@@ -130,20 +129,20 @@ class CalculateScoreUseCase {
             UseCaseCategory.GAMING -> {
                 if (finalScore >= 75 && pingMs <= 60) {
                     Triple(
-                        "Tuyệt vời để Leo Rank",
-                        "Độ trễ cực thấp (${pingMs}ms), tín hiệu sóng ổn định. Phù hợp hoàn hảo cho Liên Quân, PUBG Mobile.",
+                        "Tín hiệu Wi-Fi và độ trễ TCP tốt",
+                        "Độ trễ TCP tới đích kiểm tra là ${pingMs} ms. Các mẫu này đạt ngưỡng tham khảo cho Gaming.",
                         true
                     )
                 } else if (finalScore >= 60 && pingMs <= 90) {
                     Triple(
                         "Khá ổn cho Gaming nhẹ",
-                        "Độ trễ trung bình (${pingMs}ms). Có thể chơi tốt các game turn-based hoặc game giải trí nhẹ.",
+                        "Độ trễ TCP tới đích kiểm tra là ${pingMs} ms. Cần thử trực tiếp với máy chủ game để đánh giá trải nghiệm.",
                         false
                     )
                 } else {
                     Triple(
                         "Cảnh báo giật lag / High Ping",
-                        "Ping cao (${pingMs}ms) hoặc sóng yếu (${rssi}dBm). Không nên chơi game hành động tại vị trí này.",
+                        "Độ trễ TCP cao (${pingMs} ms) hoặc sóng yếu (${rssi} dBm). Các mẫu chưa đạt ngưỡng tham khảo cho Gaming.",
                         false
                     )
                 }
@@ -174,14 +173,14 @@ class CalculateScoreUseCase {
             UseCaseCategory.VIDEO_CALL -> {
                 if (finalScore >= 70 && pingMs <= 100 && rssi >= -75) {
                     Triple(
-                        "Đường truyền Video Call HD sắc nét",
-                        "Sóng ổn định (${rssi}dBm), độ trễ tốt (${pingMs}ms). Hoàn hảo cho các buổi học Zoom, Google Meet.",
+                        "Tín hiệu Wi-Fi và TCP đạt ngưỡng gọi video",
+                        "RSSI ${rssi} dBm, độ trễ TCP ${pingMs} ms. Chưa đo chất lượng âm thanh/hình ảnh của ứng dụng gọi video.",
                         true
                     )
                 } else {
                     Triple(
-                        "Chất lượng Call có thể bị mờ / gián đoạn",
-                        "Tín hiệu chập chờn hoặc độ trễ dao động. Nên đổi chỗ ngồi để tránh giật khung hình khi bật camera.",
+                        "Chưa đạt ngưỡng tham khảo cho gọi video",
+                        "RSSI ${rssi} dBm, độ trễ TCP ${pingMs} ms. Hãy kiểm tra kết nối và thử gọi trực tiếp để đánh giá chất lượng.",
                         false
                     )
                 }

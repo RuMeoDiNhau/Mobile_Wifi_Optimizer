@@ -286,7 +286,7 @@ fun LiveRadarScreen(
             Icon(imageVector = Icons.Default.Speed, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Kiểm tra 1-Chạm Vị trí Này (3s)",
+                text = "Đo nhanh mạng Wi-Fi hiện tại",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )

@@ -2,6 +2,7 @@ package com.mobilelegend.wlo.presentation.measure_and_result
 
 import com.mobilelegend.wlo.presentation.components.linkSpeedText
 import com.mobilelegend.wlo.presentation.components.pingText
+import com.mobilelegend.wlo.presentation.components.tcpFailureText
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -146,7 +147,7 @@ fun SessionHistoryBottomSheetContent(
                                     }
                                 }
                                 Text(
-                                    text = "TCP: ${pingText(spot.score.rawPingMs, spot.score.pingSuccessful)} | Sóng: ${spot.score.rawRssi}dBm | Liên kết Wi-Fi: ${linkSpeedText(spot.score.rawLinkSpeedMbps)}",
+                                    text = "TCP: ${pingText(spot.score.rawPingMs, spot.score.pingSuccessful)} | TCP thất bại: ${tcpFailureText(spot.score.tcpFailurePercent)} | Sóng: ${spot.score.rawRssi}dBm | Liên kết Wi-Fi: ${linkSpeedText(spot.score.rawLinkSpeedMbps)}",
                                     fontSize = 11.sp,
                                     color = TextMuted
                                 )

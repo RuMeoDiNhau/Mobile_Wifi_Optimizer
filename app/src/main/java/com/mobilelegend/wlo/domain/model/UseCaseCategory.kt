@@ -9,7 +9,7 @@ enum class UseCaseCategory(
 ) {
     GAMING(
         title = "Chơi Game (Gaming)",
-        description = "Ưu tiên độ trễ Ping thấp, ổn định và không rớt gói tin."
+        description = "Tham khảo RSSI, độ trễ và tỷ lệ kết nối TCP thành công; chưa đo máy chủ game."
     ),
     STUDY_DOWNLOAD(
         title = "Học tập & Tải File (Download)",

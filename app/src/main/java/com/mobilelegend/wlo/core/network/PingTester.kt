@@ -62,7 +62,7 @@ class PingTester(
 
     /**
      * Thực hiện chuỗi đo liên tiếp (mặc định 3 lần TCP connect)
-     * và tính toán thời gian phản hồi trung bình cùng tỷ lệ rớt gói.
+     * và tính độ trễ trung bình của các lượt thành công cùng tỷ lệ TCP connect thất bại.
      */
     suspend fun batchPing(
         packetsCount: Int = 3,
@@ -89,21 +89,21 @@ class PingTester(
             }
         }
 
-        val packetLossPercent = (failedCount * 100) / packetsCount
+        val tcpFailurePercent = ((failedCount.toLong() * 100) / packetsCount).toInt()
         if (latencies.isNotEmpty()) {
             val averageLatency = latencies.average().toLong()
             PingResult(
                 latencyMs = averageLatency,
-                packetLossPercent = packetLossPercent,
+                tcpFailurePercent = tcpFailurePercent,
                 isSuccess = true,
-                message = "Ping TB: ${averageLatency}ms | Rớt gói: $packetLossPercent%"
+                message = "TCP TB: ${averageLatency}ms | TCP connect thất bại: $tcpFailurePercent%"
             )
         } else {
             PingResult(
                 latencyMs = timeout.toLong(),
-                packetLossPercent = 100,
+                tcpFailurePercent = 100,
                 isSuccess = false,
-                message = "Không có gói tin nào phản hồi (100% rớt gói)"
+                message = "Không kết nối được đích TCP (100% lượt thất bại)"
             )
         }
     }

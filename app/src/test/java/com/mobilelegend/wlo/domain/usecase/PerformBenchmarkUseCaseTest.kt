@@ -15,7 +15,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Unit Test kiểm thử tiến trình điều phối Benchmark 1-chạm (3 giây) của PerformBenchmarkUseCase.
+ * Unit Test kiểm thử điều phối ba lượt TCP connect của PerformBenchmarkUseCase.
  */
 class PerformBenchmarkUseCaseTest {
 
@@ -33,7 +33,7 @@ class PerformBenchmarkUseCaseTest {
         )
         var ping = PingResult(
             latencyMs = 22,
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
         var measuredPacketsCount = 0
@@ -77,7 +77,7 @@ class PerformBenchmarkUseCaseTest {
     @Test
     fun benchmark_for_study_download_weights_bandwidth_properly() = runBlocking {
         mockRepo.metric = mockRepo.metric.copy(linkSpeedMbps = 300, rssi = -50)
-        mockRepo.ping = PingResult(latencyMs = 30, packetLossPercent = 0, isSuccess = true)
+        mockRepo.ping = PingResult(latencyMs = 30, tcpFailurePercent = 0, isSuccess = true)
 
         val result = performBenchmarkUseCase(UseCaseCategory.STUDY_DOWNLOAD)
 
@@ -88,11 +88,11 @@ class PerformBenchmarkUseCaseTest {
 
     @Test
     fun benchmark_fails_gracefully_when_ping_fails() = runBlocking {
-        mockRepo.ping = PingResult(latencyMs = 2000, packetLossPercent = 100, isSuccess = false)
+        mockRepo.ping = PingResult(latencyMs = 2000, tcpFailurePercent = 100, isSuccess = false)
 
         val result = performBenchmarkUseCase(UseCaseCategory.VIDEO_CALL)
 
-        assertEquals(15, result.finalScore)
-        assertEquals("Mạng mất tín hiệu Internet / Rớt gói", result.summaryText)
+        assertEquals(0, result.finalScore)
+        assertEquals("Không kết nối được đích TCP", result.summaryText)
     }
 }

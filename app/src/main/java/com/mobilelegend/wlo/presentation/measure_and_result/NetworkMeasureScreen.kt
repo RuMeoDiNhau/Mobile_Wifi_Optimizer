@@ -330,6 +330,12 @@ fun NetworkMeasureScreen(
             color = TextSecondary,
             modifier = Modifier.padding(top = 8.dp)
         )
+        Text(
+            text = "TCP connect thất bại: ${content.tcpFailure}. Độ trễ chỉ tính các lượt thành công tới đích kiểm tra, không phải ping máy chủ game.",
+            fontSize = 12.sp,
+            color = TextSecondary,
+            modifier = Modifier.padding(top = 8.dp)
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 

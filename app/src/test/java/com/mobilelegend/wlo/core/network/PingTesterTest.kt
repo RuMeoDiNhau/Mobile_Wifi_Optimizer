@@ -30,7 +30,7 @@ class PingTesterTest {
         val result = pingTester.singlePing(host = invalidHost, port = 80, timeout = 500)
 
         assertFalse("Kết nối tới host chết phải trả về isSuccess = false", result.isSuccess)
-        assertEquals(100, result.packetLossPercent)
+        assertEquals(100, result.tcpFailurePercent)
         assertTrue("Latency phải xấp xỉ timeout", result.latencyMs >= 400)
     }
 
@@ -40,6 +40,6 @@ class PingTesterTest {
         val result = pingTester.batchPing(packetsCount = 2, host = invalidHost, port = 80, timeout = 300)
 
         assertFalse(result.isSuccess)
-        assertEquals(100, result.packetLossPercent)
+        assertEquals(100, result.tcpFailurePercent)
     }
 }

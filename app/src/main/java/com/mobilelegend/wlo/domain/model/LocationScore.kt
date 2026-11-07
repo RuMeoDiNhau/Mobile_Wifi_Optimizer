@@ -16,5 +16,6 @@ data class LocationScore(
     val rawPingMs: Long,                 // Thông số Ping gốc
     val rawLinkSpeedMbps: Int,           // Tốc độ liên kết Wi-Fi, không phải tốc độ Internet
     val pingSuccessful: Boolean? = null, // null: chưa có kết quả, false: không phản hồi
-    val measurement: MeasurementContext? = null
+    val measurement: MeasurementContext? = null,
+    val tcpFailurePercent: Int? = null // null: chưa có phép thử TCP, không suy diễn thành 0%
 )

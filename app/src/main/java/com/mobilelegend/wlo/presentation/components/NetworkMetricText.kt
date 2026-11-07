@@ -2,6 +2,9 @@ package com.mobilelegend.wlo.presentation.components
 
 const val MISSING_METRIC = "—"
 
+fun tcpFailureText(percent: Int?): String =
+    percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: MISSING_METRIC
+
 fun linkSpeedText(mbps: Int?): String =
     mbps?.takeIf { it > 0 }?.let { "$it Mbps" } ?: MISSING_METRIC
 

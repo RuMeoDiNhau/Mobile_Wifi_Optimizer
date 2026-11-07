@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -43,7 +44,7 @@ class PingCancellationTest {
         assertEquals(3, sockets.size)
         assertTrue(sockets.all { it.connectCalls.get() == 1 && it.closeCalls.get() >= 1 })
         assertEquals(2L, result.latencyMs)
-        assertEquals(0, result.packetLossPercent)
+        assertEquals(0, result.tcpFailurePercent)
         assertTrue(result.isSuccess)
     }
 
@@ -56,7 +57,7 @@ class PingCancellationTest {
         assertEquals(3, sockets.size)
         assertTrue(sockets.all { it.closeCalls.get() >= 1 })
         assertFalse(result.isSuccess)
-        assertEquals(100, result.packetLossPercent)
+        assertEquals(100, result.tcpFailurePercent)
     }
 
     @Test fun invalidation_after_connect_rejects_batch_and_stops_remaining_probes() = runTest {
@@ -142,6 +143,33 @@ class PingCancellationTest {
         assertTrue(job.isCancelled)
         assertFalse(published)
         assertTrue(socket.closeCalls.get() >= 1)
+    }
+
+    @Test fun deadline_closes_blocked_fake_socket_and_never_returns_success() = runBlocking {
+        val entered = CountDownLatch(1)
+        val closed = CountDownLatch(1)
+        val socket = object : Socket() {
+            override fun connect(endpoint: SocketAddress, timeout: Int) {
+                entered.countDown()
+                check(closed.await(3, TimeUnit.SECONDS)) { "Deadline did not close fake socket" }
+                throw SocketException("Closed by deadline")
+            }
+            override fun close() { closed.countDown() }
+        }
+        var timedOut = false
+        try {
+            withTimeout(1_000L) { PingTester().singlePing(socketFactory = { socket }) }
+            fail("Deadline must cancel instead of publishing a TCP result")
+        } catch (expected: TimeoutCancellationException) {
+            timedOut = true
+        } finally {
+            // Check closure before test cleanup, which would otherwise mask a missing cancel hook.
+            val closedByDeadline = closed.count == 0L
+            socket.close()
+            assertTrue(timedOut)
+            assertEquals(0L, entered.count)
+            assertTrue(closedByDeadline)
+        }
     }
 
     @Test fun nonpositive_packet_count_is_rejected_without_creating_socket() = runTest {

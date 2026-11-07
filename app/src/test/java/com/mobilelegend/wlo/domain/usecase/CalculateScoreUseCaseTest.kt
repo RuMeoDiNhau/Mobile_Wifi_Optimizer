@@ -72,7 +72,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 25, // Điểm ping ~ 97
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -94,7 +94,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 180, // High ping -> Điểm ping ~ 11
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -116,7 +116,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 2000,
-            packetLossPercent = 100,
+            tcpFailurePercent = 100,
             isSuccess = false
         )
 
@@ -128,7 +128,7 @@ class CalculateScoreUseCaseTest {
     }
 
     @Test
-    fun packet_loss_over_50_percent_should_return_fixed_low_score_15() {
+    fun all_tcp_attempts_failed_should_return_zero_and_no_recommendation() {
         val wifiMetric = WifiMetric(
             ssid = "Unstable_Wifi",
             bssid = "AA:BB:CC:DD:EE:FF",
@@ -139,15 +139,15 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 35,
-            packetLossPercent = 66, // Rớt gói >= 50%
+            tcpFailurePercent = 100,
             isSuccess = false
         )
 
         val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.GAMING)
 
-        assertEquals(15, score.finalScore)
+        assertEquals(0, score.finalScore)
         assertFalse(score.isRecommended)
-        assertEquals("Mạng mất tín hiệu Internet / Rớt gói", score.summaryText)
+        assertEquals("Không kết nối được đích TCP", score.summaryText)
     }
 
     @Test
@@ -163,7 +163,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 75, // Điểm ping ~ 69
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -186,7 +186,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 40,
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -209,7 +209,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 30,
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -231,7 +231,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 60,
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -254,7 +254,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 35, // <= 100ms (điểm ping 92)
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
@@ -262,7 +262,7 @@ class CalculateScoreUseCaseTest {
 
         assertTrue("Điểm Video Call phải >= 70", score.finalScore >= 70)
         assertTrue("Phải được khuyến nghị gọi Video", score.isRecommended)
-        assertEquals("Đường truyền Video Call HD sắc nét", score.summaryText)
+        assertEquals("Tín hiệu Wi-Fi và TCP đạt ngưỡng gọi video", score.summaryText)
     }
 
     @Test
@@ -277,14 +277,14 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 40,
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
         val score = calculateScoreUseCase(wifiMetric, pingResult, UseCaseCategory.VIDEO_CALL)
 
         assertFalse("Sóng yếu không được khuyến nghị Video Call", score.isRecommended)
-        assertEquals("Chất lượng Call có thể bị mờ / gián đoạn", score.summaryText)
+        assertEquals("Chưa đạt ngưỡng tham khảo cho gọi video", score.summaryText)
     }
 
     @Test
@@ -299,7 +299,7 @@ class CalculateScoreUseCaseTest {
         )
         val pingResult = PingResult(
             latencyMs = 2, // Ping siêu thấp
-            packetLossPercent = 0,
+            tcpFailurePercent = 0,
             isSuccess = true
         )
 
