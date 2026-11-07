@@ -6,6 +6,7 @@ import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.model.WifiAccessState
 import com.mobilelegend.wlo.domain.repository.WifiRepository
 import com.mobilelegend.wlo.domain.usecase.StreamLiveWifiUseCase
+import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
@@ -189,7 +190,22 @@ class LiveRadarViewModel(
     }
 
     fun selectCategory(category: UseCaseCategory) {
-        _uiState.update { it.copy(selectedCategory = category) }
+        _uiState.update { state ->
+            // WORK and RELAX share a scoring category; keep the user's exact choice.
+            if (state.selectedCategory == category) state
+            else state.copy(selectedNeed = WifiNeedOption.values().first { it.category == category })
+        }
+    }
+
+    fun selectNeed(need: WifiNeedOption) {
+        _uiState.update { it.copy(selectedNeed = need) }
+    }
+
+    fun cycleNeed() {
+        _uiState.update { state ->
+            val options = WifiNeedOption.values()
+            state.copy(selectedNeed = options[(state.selectedNeed.ordinal + 1) % options.size])
+        }
     }
 
     private class StaleSampleException : Exception()

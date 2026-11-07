@@ -84,13 +84,13 @@ import com.mobilelegend.wlo.presentation.theme.ThumbnailLavender
 import com.mobilelegend.wlo.presentation.theme.ThumbnailMint
 import com.mobilelegend.wlo.domain.model.BenchmarkReadiness
 import com.mobilelegend.wlo.presentation.components.MeasurementReadinessNotice
-import com.mobilelegend.wlo.presentation.components.measuredPlacesOnly
+import com.mobilelegend.wlo.domain.model.UseCaseCategory
 
 @Composable
 fun HomeScreen(
     places: List<WifiPlaceItem>,
     selectedNeed: WifiNeedOption,
-    areaScore: Int?,
+    latestScore: Int?,
     onSelectNeed: (WifiNeedOption) -> Unit,
     onToggleSavePlace: (String) -> Unit,
     onOpenMap: () -> Unit,
@@ -106,16 +106,8 @@ fun HomeScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showAllPlaces by remember { mutableStateOf(false) }
 
-    val filteredPlaces = remember(places, searchQuery, showAllPlaces) {
-        val list = if (searchQuery.isBlank()) {
-            measuredPlacesOnly(places)
-        } else {
-            measuredPlacesOnly(places).filter {
-                it.name.contains(searchQuery, ignoreCase = true) ||
-                    it.district.contains(searchQuery, ignoreCase = true)
-            }
-        }
-        if (showAllPlaces) list else list.take(3)
+    val filteredPlaces = remember(places, selectedNeed, searchQuery, showAllPlaces) {
+        homeRecommendations(places, selectedNeed, searchQuery, showAllPlaces)
     }
 
     Box(
@@ -205,7 +197,8 @@ fun HomeScreen(
 
             // 3. Hero Card
             HeroQualityCard(
-                score = areaScore,
+                score = latestScore,
+                need = selectedNeed,
                 onOpenMap = onOpenMap
             )
 
@@ -220,7 +213,9 @@ fun HomeScreen(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Gợi ý sẽ phù hợp hơn với nhu cầu của bạn",
+                text = if (selectedNeed.category == UseCaseCategory.STUDY_DOWNLOAD)
+                    "Làm việc và Thư giãn dùng chung điểm Học tập & Tải File."
+                else "Chỉ so sánh các lượt đo cùng nhu cầu của bạn",
                 fontSize = 13.sp,
                 color = TextMuted
             )
@@ -259,7 +254,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Không bao gồm dữ liệu minh họa",
+                        text = "${selectedNeed.label} · Xếp theo điểm đã đo",
                         fontSize = 13.sp,
                         color = TextMuted
                     )
@@ -282,7 +277,11 @@ fun HomeScreen(
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (filteredPlaces.isEmpty()) Text("Chưa có địa điểm đã đo phù hợp.", color = TextMuted)
+                if (filteredPlaces.isEmpty()) Text(
+                    if (searchQuery.isBlank()) "Chưa có địa điểm đã đo cho ${selectedNeed.label}. Hãy đo thêm với nhu cầu này."
+                    else "Không có địa điểm đã đo cho ${selectedNeed.label} khớp tìm kiếm.",
+                    color = TextMuted
+                )
                 filteredPlaces.forEachIndexed { index, place ->
                     RankedPlaceCard(
                         place = place,
@@ -336,6 +335,7 @@ fun HomeScreen(
 @Composable
 private fun HeroQualityCard(
     score: Int?,
+    need: WifiNeedOption,
     onOpenMap: () -> Unit
 ) {
     Box(
@@ -438,7 +438,8 @@ private fun HeroQualityCard(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Điểm của lượt đo gần nhất trong phiên",
+                        text = if (score == null) "Chưa có lượt đo cho ${need.label}"
+                            else "Lượt đo gần nhất cho ${need.label}",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.72f)
                     )

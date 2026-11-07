@@ -24,7 +24,8 @@ sealed interface MeasureStatus {
 
 data class MeasureUiState(
     val status: MeasureStatus = MeasureStatus.Idle,
-    val selectedCategory: UseCaseCategory = UseCaseCategory.GAMING,
+    // Captured for the active/last attempt; the next selection belongs to LiveRadarUiState.
+    val selectedCategory: UseCaseCategory = UseCaseCategory.STUDY_DOWNLOAD,
     val savedSpots: List<SavedSpotItem> = emptyList(),
     // Remains true until cancellation has finished closing the session and its sockets.
     val isBenchmarkRunning: Boolean = false

@@ -22,7 +22,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.mobilelegend.wlo.core.permissions.PermissionHelper
 import com.mobilelegend.wlo.data.sensor.DeviceLocationProvider
-import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.presentation.components.placesWithDistances
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -32,10 +31,10 @@ import kotlinx.coroutines.isActive
 import com.mobilelegend.wlo.presentation.components.DefaultWifiPlaces
 import com.mobilelegend.wlo.presentation.components.RadarObservationNotice
 import com.mobilelegend.wlo.presentation.components.toWifiPlace
-import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 import com.mobilelegend.wlo.presentation.components.WifiPlaceItem
 import com.mobilelegend.wlo.presentation.components.WloBottomNavigationBar
 import com.mobilelegend.wlo.presentation.home.HomeScreen
+import com.mobilelegend.wlo.presentation.home.latestMeasurementForNeed
 import com.mobilelegend.wlo.presentation.live_radar.LiveRadarScreen
 import com.mobilelegend.wlo.presentation.live_radar.LiveRadarViewModel
 import com.mobilelegend.wlo.presentation.map.WifiMapScreen
@@ -69,10 +68,10 @@ fun AppNavigation(
     var userLocation by remember { mutableStateOf(locationProvider.getCurrentLocation()) }
     val locationRequest by locationProvider.requestState.collectAsStateWithLifecycle()
     var demoPlaces by remember { mutableStateOf(DefaultWifiPlaces) }
-    var selectedNeed by remember { mutableStateOf(WifiNeedOption.WORK) }
     var inspectedPlace by remember { mutableStateOf<WifiPlaceItem?>(null) }
 
     val radarState by liveRadarViewModel.uiState.collectAsStateWithLifecycle()
+    val selectedNeed = radarState.selectedNeed
     val measureState by measureViewModel.uiState.collectAsStateWithLifecycle()
     val readiness = radarState.readiness(measureState.isBenchmarkRunning)
 
@@ -80,7 +79,7 @@ fun AppNavigation(
     val places = placesWithDistances(measureState.savedSpots.asReversed().mapNotNull { spot ->
         spot.score.toWifiPlace()?.copy(name = spot.spotName, isSaved = spot.isSaved)
     } + demoPlaces, userLocation).mapIndexed { index, place -> place.copy(rank = index + 1) }
-    val areaScore = measureState.savedSpots.lastOrNull()?.score?.finalScore
+    val latestScore = latestMeasurementForNeed(measureState.savedSpots, selectedNeed)?.finalScore
     val toggleSavePlace: (String) -> Unit = { placeId ->
         val measurementId = places.find { it.id == placeId }?.measurement?.measurement?.id
         if (measurementId != null) {
@@ -111,12 +110,8 @@ fun AppNavigation(
 
     val startCurrentNetworkMeasurement: () -> Unit = {
         inspectedPlace = null
-        liveRadarViewModel.selectCategory(selectedNeed.category)
         val locationAtStart = locationProvider.getCurrentLocation().toMeasurementLocation()
-        measureViewModel.startBenchmark(
-            selectedNeed.category,
-            locationAtStart
-        )
+        startSelectedMeasurement(liveRadarViewModel, measureViewModel, locationAtStart)
     }
 
     val refreshUserLocation: () -> Long? = {
@@ -175,16 +170,13 @@ fun AppNavigation(
                 HomeScreen(
                     places = places,
                     selectedNeed = selectedNeed,
-                    areaScore = areaScore,
+                    latestScore = latestScore,
                     radarNotice = { RadarObservationNotice(radarState, liveRadarViewModel::refreshHardwareStatus) },
                     readiness = readiness,
                     onOpenAppSettings = onOpenAppSettings,
                     onOpenLocationSettings = onOpenLocationSettings,
                     onOpenWifiSettings = onOpenWifiSettings,
-                    onSelectNeed = { option ->
-                        selectedNeed = option
-                        liveRadarViewModel.selectCategory(option.category)
-                    },
+                    onSelectNeed = liveRadarViewModel::selectNeed,
                     onToggleSavePlace = toggleSavePlace,
                     onOpenMap = {
                         navigateToTab(Screen.WifiMap)
@@ -251,13 +243,7 @@ fun AppNavigation(
                 ProfileScreen(
                     selectedNeed = selectedNeed,
                     totalMeasurements = measureState.savedSpots.size,
-                    onCycleNeed = {
-                        val allNeeds = WifiNeedOption.values()
-                        val nextIndex = (selectedNeed.ordinal + 1) % allNeeds.size
-                        val nextNeed = allNeeds[nextIndex]
-                        selectedNeed = nextNeed
-                        liveRadarViewModel.selectCategory(nextNeed.category)
-                    },
+                    onCycleNeed = liveRadarViewModel::cycleNeed,
                     onOpenAppSettings = onOpenAppSettings
                 )
             }
@@ -266,9 +252,10 @@ fun AppNavigation(
             composable(Screen.LiveRadar.route) {
                 LiveRadarScreen(
                     viewModel = liveRadarViewModel,
-                    onNavigateToBenchmark = { category ->
+                    onNavigateToBenchmark = {
+                        val category = liveRadarViewModel.uiState.value.selectedCategory
                         navController.navigate(Screen.MeasureBenchmark.createRoute(category.name))
-                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().toMeasurementLocation())
+                        startCurrentNetworkMeasurement()
                     },
                     onOpenLocationSettings = onOpenLocationSettings,
                     onOpenAppSettings = onOpenAppSettings,
@@ -280,21 +267,14 @@ fun AppNavigation(
             composable(
                 route = Screen.MeasureBenchmark.route,
                 arguments = listOf(navArgument("categoryName") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val categoryName = backStackEntry.arguments?.getString("categoryName") ?: UseCaseCategory.GAMING.name
-                val category = try {
-                    UseCaseCategory.valueOf(categoryName)
-                } catch (e: Exception) {
-                    UseCaseCategory.GAMING
-                }
-
+            ) {
+                // The legacy path remains routable; a restored path must not reset the shared selection.
                 MeasureScreen(
                     radarNotice = { RadarObservationNotice(radarState, liveRadarViewModel::refreshHardwareStatus) },
-                    category = category,
+                    category = if (measureState.isBenchmarkRunning) measureState.selectedCategory
+                        else radarState.selectedCategory,
                     viewModel = measureViewModel,
-                    onStartMeasurement = {
-                        measureViewModel.startBenchmark(category, locationProvider.getCurrentLocation().toMeasurementLocation())
-                    },
+                    onStartMeasurement = startCurrentNetworkMeasurement,
                     readiness = readiness,
                     onOpenAppSettings = onOpenAppSettings,
                     onOpenLocationSettings = onOpenLocationSettings,

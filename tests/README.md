@@ -1,4 +1,4 @@
-# Kiểm thử BUG-01 đến BUG-15
+# Kiểm thử BUG-01 đến BUG-17
 
 Ngày ghi nhận: **07/11/2026** (Asia/Saigon).
 
@@ -18,11 +18,40 @@ Không có kết quả `BUILD SUCCESSFUL`, JUnit XML hoặc ảnh chạy ứng d
 | BUG-10–11 | Thêm 30 test trong `LiveRadarLifecycleTest.kt`; cập nhật fixture mẫu Wi-Fi |
 | BUG-12–13 | Thêm 26 test: 13 deadline/tiến trình, 12 TCP/scoring, 1 socket giả bị đóng khi timeout |
 | BUG-14–15 | Thêm 45 test: 25 quản lý yêu cầu vị trí, 8 chọn/đánh giá mẫu và 12 danh sách Đã lưu |
-| Toàn bộ test hồi quy trong `tests/` | **197 phương thức `@Test`, 0 đã thực thi** |
+| BUG-16–17 | Thêm 36 test: 12 gợi ý Trang chủ, 11 luồng chọn nhu cầu/đo và 13 so sánh lịch sử |
+| Toàn bộ test hồi quy trong `tests/` | **233 phương thức `@Test`, 0 đã thực thi** |
 | Test có sẵn trong `app/src/test/` | **33 phương thức `@Test`, chưa chạy lại** |
-| Tổng số khai báo test | **230**, đếm từ source; chưa xác nhận Gradle discover |
+| Tổng số khai báo test | **266**, đếm từ source; chưa xác nhận Gradle discover |
 | Build / assemble / lint / unit test / UI test | **Chưa chạy** |
 | Wi-Fi, quyền Android, GPS, Back/tab/background thật | **Chưa kiểm chứng trên runtime** |
+
+## Thay đổi và kiểm tra BUG-16–17
+
+### BUG-16: cùng một lựa chọn nhu cầu cho gợi ý và lượt đo mới
+
+- `LiveRadarUiState.selectedNeed` là nguồn lựa chọn chung cho Trang chủ, Cá nhân và Radar; category suy ra từ lựa chọn này. Mặc định thống nhất **Làm việc / STUDY_DOWNLOAD**. Giữ nguyên lựa chọn qua ViewModelStore khi Activity được tạo lại; không bổ sung lưu qua process death (lịch sử vẫn thuộc phiên).
+- Đổi nhu cầu ở Trang chủ, cycle ở Cá nhân hoặc chọn category ở Radar cập nhật cùng state. Làm việc và Thư giãn hiện dùng chung bộ trọng số Download; giao diện giải thích rõ và không tự tạo thêm công thức chấm điểm. Khi chọn lại category Download từ Radar, lựa chọn Thư giãn đang có được giữ nguyên.
+- Các lối bắt đầu đo và thử lại gọi chung `startSelectedMeasurement`, đọc state hiện tại ngay lúc bấm, không dùng bản sao Compose chưa cập nhật. Route benchmark cũ vẫn truy cập được nhưng tham số category không còn ghi đè lựa chọn chung khi khôi phục navigation. Category của lượt đang chạy/kết quả cũ là snapshot riêng và không đổi theo lựa chọn tiếp theo.
+- `homeRecommendations` chỉ nhận điểm thật có snapshot, thuộc đúng category đã chọn; không dùng tag mặc định “phù hợp mọi nhu cầu” để xếp lẫn điểm. Lọc tên/khu vực, xếp điểm giảm dần rồi thời gian mới hơn rồi ID, sau đó mới giới hạn 3 dòng và đánh lại rank liên tục. Không chấm lại điểm của nhu cầu khác; không có điểm phù hợp thì hiện trạng thái rỗng. Đây là xếp hạng tương đối, không hứa một điểm thấp là kết nối tốt.
+- Thẻ điểm gần nhất cũng lọc cùng category, giữ điểm 0, cho phép kết quả không GPS và hiện `—` khi chưa đo cho nhu cầu đó. Các snapshot, tọa độ, thời gian và thông số gốc không bị sửa.
+
+### BUG-17: so sánh trong từng nhóm và làm rõ phạm vi
+
+- `historyComparison` chia toàn bộ lịch sử theo category; không còn một điểm cao nhất chung cho Gaming/Download/Video Call. Mỗi nhóm xếp theo điểm, thời gian và ID; nhóm hiển thị nhu cầu, tổng lượt đo và số kết quả đã đánh dấu lưu.
+- Chỉ snapshot **đang đánh dấu lưu** tham gia nhãn “Tốt nhất trong các điểm đã lưu cho nhu cầu này”. Kết quả đã bỏ bookmark vẫn xem được trong lịch sử nhưng không tranh nhãn này. Nhóm có dưới hai kết quả đã lưu không có nhãn so sánh. Nếu nhiều điểm bằng mức cao nhất, tất cả nhận nhãn **đồng điểm cao nhất**; điểm 0 vẫn giữ 0 và không trở thành khuyến nghị tốt.
+- Mỗi dòng hiển thị nhu cầu, SSID, BSSID và ngày/giờ đo đến giây kèm múi giờ, lấy từ snapshot gốc. Đổi tên hoặc thời điểm mở màn hình không đổi metadata. Xóa/bỏ lưu/lưu lại làm tính lại kết quả trong đúng nhóm.
+
+### 36 test mới đã viết — chưa thực thi
+
+| File | Số ca | Phạm vi assertion | Kết quả chạy |
+| --- | ---: | --- | --- |
+| `HomeRecommendationsTest.kt` | 12 | Lọc từng nhu cầu; không fallback sang nhu cầu khác/demo; tag sai; thiếu snapshot; thứ tự điểm/time/ID; top 3; tìm kiếm; Work/Relax; giữ snapshot và điểm 0; thẻ điểm mới nhất/thiếu GPS; xóa/đổi lựa chọn | Chưa chạy |
+| `SelectedNeedFlowTest.kt` | 11 | Đo trực tiếp mặc định; chọn rồi đo trước recomposition; bốn lựa chọn; cycle liên tiếp; chọn từ Radar; giữ Relax; ViewModelStore; đổi nhu cầu khi đang đo; blocked/retry; lưu kết quả cũ; bookmark/lưu/xóa cập nhật so sánh | Chưa chạy |
+| `HistoryComparisonTest.kt` | 13 | Rỗng; nhiều category; một điểm mỗi nhóm; đồng điểm; toàn điểm 0; điểm chưa bookmark; bỏ lưu hết; xóa điểm cao nhất; thứ tự ổn định; snapshot metadata; múi giờ; thiếu identity; cùng vị trí/thiếu GPS nhưng khác ID | Chưa chạy |
+
+Các test dùng dữ liệu/repository giả và scheduler coroutine ảo. Đã đối chiếu code với các ca biên; **không thực thi** JUnit, Gradle, app, emulator hoặc Wi-Fi/GPS thật trên máy người dùng. Phiên này không có runner độc lập, nên không có log runtime, JUnit XML hay kết quả Pass/Fail.
+
+Rà soát tĩnh đã thực hiện: `git -c core.safecrlf=false diff --check` không báo lỗi; import trùng trong Kotlin thay đổi/thêm mới: **0**; tên test trùng trong ba file mới: **0**. Đếm **12 + 11 + 13 = 36**, tổng **233 hồi quy + 33 cũ = 266** khai báo. Đối chiếu các call site Home/Radar/navigation và luồng bắt đầu đo: chỉ helper chung gọi `startBenchmark` trong presentation ngoài định nghĩa ViewModel. Những kiểm tra này không xác nhận Kotlin đã biên dịch hoặc UI đã hoạt động trên thiết bị.
 
 ## Thay đổi và kiểm tra BUG-14–15
 
@@ -210,8 +239,11 @@ Thư mục `tests/src/test/kotlin/com/mobilelegend/wlo/regression/` đã đượ
 | [LocationRequestControllerTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationRequestControllerTest.kt) | 25 | Timeout, cleanup, foreground, callback cũ/đồng bộ, lỗi và request gọi lại | Chưa chạy |
 | [LocationSampleSelectionTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/LocationSampleSelectionTest.kt) | 8 | Chọn mẫu còn hiệu lực, tuổi monotonic, accuracy, mock/invalid, Mountain View | Chưa chạy |
 | [SavedPlacesContentTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/SavedPlacesContentTest.kt) | 12 | Bỏ lưu hết/lưu một, thống kê, thiếu vị trí, xóa/lưu lại và snapshot | Chưa chạy |
+| [HomeRecommendationsTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/HomeRecommendationsTest.kt) | 12 | Lọc/xếp hạng đúng nhu cầu, top 3/tìm kiếm, snapshot và điểm gần nhất | Chưa chạy |
+| [SelectedNeedFlowTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/SelectedNeedFlowTest.kt) | 11 | Một lựa chọn chung, đo/retry, ViewModelStore, category bất biến và hành động lịch sử | Chưa chạy |
+| [HistoryComparisonTest.kt](src/test/kotlin/com/mobilelegend/wlo/regression/HistoryComparisonTest.kt) | 13 | Nhóm nhu cầu, bookmark, đồng điểm, xóa và metadata lúc đo | Chưa chạy |
 
-197 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
+233 test hồi quy dùng dữ liệu giả và không thực hiện kết nối mạng thật. `PingCancellationTest` override `Socket.connect`; hai ca dùng worker thread/latch với timeout để mô phỏng connect đang kẹt, những ca coroutine khác dùng scheduler kiểm thử. Các kiểm tra này chưa thay thế test tích hợp `AndroidWifiBenchmarkSession`, callback hệ điều hành, Compose navigation hoặc Activity lifecycle.
 
 Các test cũ đã được cập nhật ở mức source: assertion nhãn LinkSpeed, repository giả dùng API phiên đo và fixture lịch sử có timestamp cố định. Hai test `PingTesterTest` cũ vẫn có kết nối mạng thật.
 
@@ -273,11 +305,17 @@ bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.LocationSampleSelectionTest' \
   --tests 'com.mobilelegend.wlo.regression.SavedPlacesContentTest'
 
-# Chạy toàn bộ 197 test hồi quy BUG-01–15.
+# BUG-16–17: 36 ca mới, dùng dữ liệu và repository giả.
+bash ./gradlew --no-daemon :app:testDebugUnitTest \
+  --tests 'com.mobilelegend.wlo.regression.HomeRecommendationsTest' \
+  --tests 'com.mobilelegend.wlo.regression.SelectedNeedFlowTest' \
+  --tests 'com.mobilelegend.wlo.regression.HistoryComparisonTest'
+
+# Chạy toàn bộ 233 test hồi quy BUG-01–17.
 bash ./gradlew --no-daemon :app:testDebugUnitTest \
   --tests 'com.mobilelegend.wlo.regression.*'
 
-# Toàn bộ 230 khai báo test, bao gồm hai test socket thật cũ.
+# Toàn bộ 266 khai báo test, bao gồm hai test socket thật cũ.
 bash ./gradlew --no-daemon :app:testDebugUnitTest
 
 # Biên dịch APK và kiểm tra Android lint.
@@ -327,6 +365,11 @@ Nếu dừng ở dependency/SDK/biên dịch, ghi đúng giai đoạn; không gh
 | Cache mới/cũ/mock, timestamp tương lai, chỉ Coarse, Mountain View thật | Hiện đúng tuổi/accuracy/trạng thái; không dùng mẫu không hợp lệ, không loại tọa độ thật | Chưa chạy |
 | Bỏ lưu hết → lưu lại một → xóa hết → đo mới | Số dòng lần lượt 0 → 1 → 0 → 1; tổng lượt đo theo lịch sử | Chưa chạy |
 | Lưu phép đo thiếu GPS, rồi bỏ bookmark/xóa | Không tạo marker giả; thống kê thiếu vị trí và lịch sử cập nhật đúng | Chưa chạy |
+| Đổi nhu cầu ở Home/Profile/Radar, vào tab đo trực tiếp hoặc qua Home; bấm đổi rồi đo nhanh | Cùng nhu cầu trên UI và snapshot mới; mặc định Work; không lấy selection cũ | Chưa chạy |
+| Đổi nhu cầu khi phép đo đang chạy, xoay màn hình hoặc khôi phục tab/route | Lượt đang chạy giữ category lúc bắt đầu; lựa chọn mới dùng cho lần sau | Chưa chạy |
+| Có nhiều nhu cầu, tìm kiếm/top 3, nhu cầu chưa có phép đo; chọn Work rồi Relax | Danh sách/rank và thẻ điểm đúng category; rỗng không fallback; Work/Relax dùng chung thang điểm có giải thích | Chưa chạy |
+| Lịch sử gồm nhiều category, đồng điểm/điểm 0, bỏ bookmark/xóa điểm cao nhất | Chỉ so sánh trong nhóm và trong tập bookmark; cập nhật nhãn/đồng điểm; không nâng điểm 0 | Chưa chạy |
+| Tên địa điểm/SSID dài, font lớn, nhiều nhóm lịch sử và đổi múi giờ | Nhãn phạm vi/nhu cầu/mạng/thời gian đọc được, không đè nút xóa; timestamp gốc giữ nguyên | Chưa chạy |
 
 Ghi thiết bị, Android API, thao tác, network/SSID/BSSID trước và sau, số bản ghi và log quan sát được khi thực hiện từng ca. Chỉ đánh dấu Pass/Fail khi đã chạy thật.
 

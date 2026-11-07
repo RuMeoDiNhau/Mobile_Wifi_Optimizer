@@ -6,13 +6,14 @@ import com.mobilelegend.wlo.domain.model.SignalQualityLevel
 import com.mobilelegend.wlo.domain.model.UseCaseCategory
 import com.mobilelegend.wlo.domain.model.WifiAccessState
 import com.mobilelegend.wlo.domain.model.benchmarkReadiness
+import com.mobilelegend.wlo.presentation.components.WifiNeedOption
 
 enum class RadarObservation { PAUSED, WAITING_FOR_CONDITIONS, STARTING, LIVE, RETRYING, ERROR }
 enum class RadarFailure { PERMISSION_DENIED, SOURCE_FAILED, STREAM_ENDED, STALE_DATA }
 
 data class LiveRadarUiState(
     val radarData: LiveRadarData = EmptyRadarData,
-    val selectedCategory: UseCaseCategory = UseCaseCategory.GAMING,
+    val selectedNeed: WifiNeedOption = WifiNeedOption.WORK,
     val isWifiConnected: Boolean = false,
     val wifiAccess: WifiAccessState = WifiAccessState(),
     val isLoading: Boolean = false,
@@ -22,6 +23,8 @@ data class LiveRadarUiState(
     val sampleAgeMs: Long? = null,
     val automaticRetries: Int = 0
 ) {
+    // One selection for Home, Profile, Radar and every new measurement.
+    val selectedCategory: UseCaseCategory get() = selectedNeed.category
     val isLocationPermissionGranted: Boolean get() = wifiAccess.canUseMap
     val isGpsEnabled: Boolean get() = wifiAccess.locationServiceEnabled
     fun readiness(busy: Boolean = false) = benchmarkReadiness(wifiAccess, isWifiConnected,

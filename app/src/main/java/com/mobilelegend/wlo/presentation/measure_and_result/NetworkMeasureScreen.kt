@@ -114,6 +114,7 @@ fun NetworkMeasureScreen(
         // Cảnh báo quyền vị trí nếu thiếu
         MeasurementReadinessNotice(readiness, onOpenAppSettings, onOpenLocationSettings, onOpenWifiSettings)
         RadarObservationNotice(radarState, liveRadarViewModel::refreshHardwareStatus)
+        Text("Nhu cầu cho lượt đo mới: ${radarState.selectedNeed.label}", color = TextSecondary, fontSize = 13.sp)
         Spacer(modifier = Modifier.height(12.dp))
 
         // 2. Main Dark Green Gauge Card

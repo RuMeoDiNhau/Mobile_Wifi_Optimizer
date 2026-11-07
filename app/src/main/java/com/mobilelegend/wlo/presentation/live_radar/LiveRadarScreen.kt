@@ -63,7 +63,7 @@ import com.mobilelegend.wlo.presentation.theme.TextSecondary
 @Composable
 fun LiveRadarScreen(
     viewModel: LiveRadarViewModel,
-    onNavigateToBenchmark: (UseCaseCategory) -> Unit,
+    onNavigateToBenchmark: () -> Unit,
     onOpenLocationSettings: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
@@ -272,7 +272,7 @@ fun LiveRadarScreen(
 
         // 7. Benchmark Button (CTA)
         Button(
-            onClick = { onNavigateToBenchmark(uiState.selectedCategory) },
+            onClick = onNavigateToBenchmark,
             enabled = readiness.canMeasure,
             modifier = Modifier
                 .fillMaxWidth()
